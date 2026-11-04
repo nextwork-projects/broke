@@ -1,4 +1,5 @@
 import { ChevronRight, Sparkles } from "lucide-react";
+import { DonateLink } from "@/components/Donate";
 import Link from "next/link";
 import { countryOf } from "@/lib/countries";
 import { getUser } from "@/lib/data";
@@ -30,6 +31,8 @@ export default async function More() {
         <span className="flex-1 font-medium">Connect your AI</span>
         <ChevronRight size={18} className="text-muted shrink-0" />
       </Link>
+      {/* The sidebar has this link too; on a phone, More is the only place. */}
+      <DonateLink className="card-link flex items-center gap-3 px-6 py-4 font-medium [&_svg]:text-muted" />
     </div>
   );
 }

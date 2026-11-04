@@ -7,6 +7,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { Suspense, useEffect, useState } from "react";
 import { useAssistant } from "@/components/Assistant";
 import { BookmarkButton, SavedList } from "@/components/Bookmarks";
+import { DonateLink, DonatePrompt } from "@/components/Donate";
 
 // Home is the three steps. Spending holds Budgets and Recurring as tabs, More holds the rest; every page keeps its own URL.
 type Icon = ComponentType<{ size?: number; strokeWidth?: number }>;
@@ -59,8 +60,10 @@ export function Nav() {
         <MessageCircle size={18} strokeWidth={1.6} />
         <span className="flex-1 text-left">Ask broke ai</span>
       </button>
+      <DonateLink className="flex items-center gap-3 px-3 py-2 rounded-xl text-[14px] whitespace-nowrap text-ink/70 hover:text-ink hover:bg-canvas/60" />
       <Suspense><SavedList /></Suspense>
     </nav>
+    <DonatePrompt />
     </>
   );
 }
