@@ -102,12 +102,12 @@ export async function setupStatus(signedIn: boolean): Promise<SetupStatus> {
     note: sb?.ok ? (ref ? `Project ${ref}` : sb.message) : sb?.message,
     steps: [
       ["Make a free account and project at ", { href: "https://supabase.com/dashboard/new", label: "supabase.com" }, ". Any name works. Save the database password it gives you."],
-      ["Copy your Project URL from ", { href: dash("/settings/api"), label: "Project Settings → Data API" }, "."],
-      ["Copy the publishable and secret keys from ", { href: dash("/settings/api-keys"), label: "Project Settings → API Keys" }, "."],
+      ["Open ", { href: dash("/settings/api-keys"), label: "Project Settings → API Keys" }, " and copy the publishable and secret keys."],
+      ["For the Project URL, copy the address from your browser's address bar on that page. broke works out the rest."],
       ["Paste all three below and press Save."],
     ],
     fields: fields(env, ["NEXT_PUBLIC_SUPABASE_URL", "NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY", "SUPABASE_SERVICE_ROLE_KEY"], {
-      NEXT_PUBLIC_SUPABASE_URL: { placeholder: "https://xxxx.supabase.co" },
+      NEXT_PUBLIC_SUPABASE_URL: { placeholder: "https://supabase.com/dashboard/project/… or https://xxxx.supabase.co" },
       NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: { placeholder: "sb_publishable_…" },
       SUPABASE_SERVICE_ROLE_KEY: { placeholder: "sb_secret_…" },
     }),

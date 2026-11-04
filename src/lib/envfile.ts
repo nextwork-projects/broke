@@ -79,6 +79,13 @@ export function updateEnvText(text: string, updates: Record<string, string>): st
 const quote = (v: string) => (/[\s#$]/.test(v) ? `"${v.replace(/\$/g, "\\$")}"` : v);
 
 // Every value is checked before anything touches the disk. Returns per-key errors.
+// The Project URL is https://<ref>.supabase.co, and the ref is also in the browser's address bar on any page of the
+// project in Supabase's dashboard. So that address, or the bare ref, is accepted and turned into the Project URL.
+export function supabaseUrl(v: string) {
+  const ref = v.match(/supabase\.com\/dashboard\/project\/([a-z0-9]{20})\b/)?.[1] ?? v.match(/^([a-z0-9]{20})$/)?.[1];
+  return ref ? `https://${ref}.supabase.co` : v.replace(/\/+$/, "");
+}
+
 export function validate(updates: Record<string, unknown>): { clean: Record<string, string>; errors: Record<string, string> } {
   const clean: Record<string, string> = {};
   const errors: Record<string, string> = {};
@@ -89,6 +96,7 @@ export function validate(updates: Record<string, unknown>): { clean: Record<stri
     const v = raw.trim();
     if (/[\u0000-\u001f\u007f'"`\\]/.test(v)) { errors[k] = "Contains characters that aren't allowed (line breaks, quotes or backslashes)."; continue; } // no newline/quote injection
     if (v === "") { clean[k] = ""; continue; }
+    if (k === "NEXT_PUBLIC_SUPABASE_URL") { const u = supabaseUrl(v); const err = spec.check(u); if (err) errors[k] = err; else clean[k] = u; continue; }
     const err = spec.check(v);
     if (err) errors[k] = err;
     else clean[k] = v;

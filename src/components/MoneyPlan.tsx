@@ -1,15 +1,14 @@
 "use client";
 
-import { Bell, CalendarDays, Check, ChevronDown, Copy, LoaderCircle, Mail, MessageSquare, Phone, TriangleAlert } from "lucide-react";
+import { Bell, CalendarDays, ChevronDown, Copy, LoaderCircle, Mail, MessageSquare, Phone } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { useAssistant } from "@/components/Assistant";
 import { CategoryIcon } from "@/components/Icons";
 import { useMoney } from "@/components/Money";
-import { PayoffChart } from "@/components/PayoffChart";
 import { toast } from "@/components/Toast";
-import { STEP_LABEL, STEPS, sectionOf, stepOf, type Kind, type Section, type Status } from "@/lib/plan";
-import type { Later, PMove } from "@/lib/projection";
+import { sectionOf, stepOf, type Kind, type Section, type Status } from "@/lib/plan";
+import type { PMove } from "@/lib/projection";
 import { createClient } from "@/utils/supabase/client";
 
 type Message = { to: string; channel: "email" | "sms" | "call"; subject?: string; body: string; phone?: string };
@@ -29,7 +28,6 @@ export type PlanState = {
 const PROVIDER: Record<string, string> = { openrouter: "OpenRouter", claude: "Claude", codex: "ChatGPT", gemini: "Gemini", opencode: "opencode", local: "your local model" };
 // What the audit is doing, shown while it runs. Time-based: the CLI doesn't report its own progress.
 const STAGES = ["Reading your spending, bills and subscriptions", "Checking cash, debt, cards and your match", "Writing your plan", "Checking every number and link"];
-const LOOKS_AT = ["Spending above income, card interest and fees", "An emergency fund sized from your own essential spending", "Your employer match, then debt, then 401(k), HSA and IRA room you can afford", "Tax: your bracket, refunds, payments, losses to harvest and deductions", "Subscriptions, price rises and bills worth a call", "Messages worth sending, drafted for you"];
 
 const enc = encodeURIComponent;
 const mailto = (m: Message) => `mailto:?${m.subject ? `subject=${enc(m.subject)}&` : ""}body=${enc(m.body)}`;
@@ -80,24 +78,9 @@ const SECTION_COLOR: Record<Section, string> = { spending: "#b07a2a", tax: "var(
 // The same Phosphor duotone glyphs the category icons use.
 const SECTION_ICON: Record<Section, string> = { spending: "shopping", tax: "taxes", debt: "loan", bills: "bills", cards: "credit_card", saving: "income" };
 
-// When to do a move: its deadline if it has one, else how long it takes.
-const WHEN = ["week", "month", "dec31", "taxday", "anytime"] as const;
-type When = (typeof WHEN)[number];
-const WHEN_LABEL: Record<When, string> = { week: "This week", month: "This month", dec31: "Before Dec 31", taxday: "By the tax deadline", anytime: "Anytime" };
-function whenOf(m: PlanMove, today: string): When {
-  const year = Number(today.slice(0, 4));
-  if (!m.deadline) return m.effort === "5 min" ? "week" : m.effort === "30 min" ? "month" : "anytime";
-  const days = (Date.parse(m.deadline) - Date.parse(today)) / 864e5;
-  if (days <= 7) return "week";
-  if (days <= 31) return "month";
-  if (m.deadline <= `${year}-12-31`) return "dec31";
-  if (m.deadline <= `${year + 1}-04-15`) return "taxday";
-  return "anytime";
-}
-
 const value = (ms: PlanMove[], once: boolean) => ms.filter((m) => !!m.once === once).reduce((s, m) => s + Number(m.yearly_impact), 0);
 
-export function MoneyPlan({ initial, today, name, payoff }: { initial: PlanState; today: string; name: string; payoff: { rate: number | null; later: Later | null } }) {
+export function MoneyPlan({ initial, today, name }: { initial: PlanState; today: string; name: string }) {
   const { money0, dateLabel } = useMoney();
   const [state, setState] = useState(initial);
   const [moves, setMoves] = useState(initial.moves);
@@ -113,9 +96,7 @@ export function MoneyPlan({ initial, today, name, payoff }: { initial: PlanState
   const live = moves.filter((m) => m.status === "todo" || m.status === "doing").sort((a, b) => stepOf(a) - stepOf(b));
   const yearly = value(live, false), once = value(live, true);
   const first = live[0];
-  const ladder = STEPS.map((k) => ({ k, ms: live.filter((m) => stepOf(m) === k && m !== first) })).filter((x) => x.ms.length);
   const closed = moves.filter((m) => m.status === "done" || m.status === "dismissed");
-  const timeline = WHEN.map((w) => ({ w, ms: live.filter((m) => whenOf(m, today) === w) })).filter((x) => x.ms.length);
   const short = (d: string) => dateLabel(d, { month: "short", day: "numeric" });
   const looks = new Set(state.looksDone ?? []);
 
@@ -133,7 +114,7 @@ export function MoneyPlan({ initial, today, name, payoff }: { initial: PlanState
       setState(s);
       setMoves(s.moves);
       setOpen(null);
-      router.refresh(); // the payoff chart's possible-later layer is worked out on the server from the new plan
+      router.refresh();
     }, 2000);
   };
   useEffect(() => {
@@ -173,133 +154,70 @@ export function MoneyPlan({ initial, today, name, payoff }: { initial: PlanState
     } else if (m.status === "todo" && steps_done.length) setStatus(m, "doing", true);
   };
 
-  const jump = (id: string) => {
-    setOpen(id);
-    requestAnimationFrame(() => document.getElementById(`move-${id}`)?.scrollIntoView({ behavior: "smooth", block: "start" }));
-  };
   const p = state.plan;
-  const row = (m: PlanMove, i: number) => (
-    <MoveRow key={m.id} m={m} first={i === 0} open={open === m.id} toggle={() => setOpen(open === m.id ? null : m.id)} setStatus={setStatus} setSteps={setSteps} short={short} today={today} name={name} looksDone={looks.has(m.id)} />
+  const [all, setAll] = useState(false);
+  const shown = all ? live : live.slice(0, 5);
+  const row = (m: PlanMove, i: number, n?: number) => (
+    <MoveRow key={m.id} m={m} n={n} first={i === 0} open={open === m.id} toggle={() => setOpen(open === m.id ? null : m.id)} setStatus={setStatus} setSteps={setSteps} short={short} today={today} name={name} looksDone={looks.has(m.ref ?? "")} />
   );
 
+  // The plan in one card: Claude's summary of where you stand, then the next steps in order. Open a step for how to do it.
   return (
-    <div className="space-y-6">
-      <section className="card p-6 md:p-7 space-y-5">
-        <div className="flex flex-wrap items-end gap-6">
+    <section className="card overflow-hidden">
+      <div className="p-6 md:p-7 space-y-3">
+        <div className="flex flex-wrap items-start justify-between gap-4">
           <div className="flex-1 min-w-60 space-y-1.5">
-            <div className="text-sm text-muted">{p ? `Last audit ${dateLabel(p.created_at, { month: "short", day: "numeric" })}, ${p.provider ? `written by ${PROVIDER[p.provider] ?? p.provider}` : "built from your numbers"}` : "No audit yet"}</div>
-            <div className="figure">
-              {money0(yearly)}<span className="text-base font-normal tracking-normal text-muted"> a year on the table</span>
+            <div className="text-sm text-muted">
+              {p ? `${p.provider ? `Written by ${PROVIDER[p.provider] ?? p.provider}` : "Built from your accounts"} on ${dateLabel(p.created_at, { month: "short", day: "numeric" })}` : "Your plan"}
             </div>
-            <div className="text-sm text-muted tabular-nums">
-              {once > 0 && <>Plus {money0(once)} one-time. </>}Saved so far: {money0(saved)} a year
-            </div>
+            <p className="text-xl font-semibold tracking-[-0.01em] leading-snug">
+              {p?.summary ?? (p ? first?.title ?? "Nothing left to do." : "Get a plan for your money: what to do first, then what comes next.")}
+            </p>
           </div>
-          <button onClick={run} disabled={state.running || !state.ready} className="btn-primary disabled:opacity-60 flex items-center gap-2">
+          <button onClick={run} disabled={state.running || !state.ready} className={`${p ? "btn" : "btn-primary"} disabled:opacity-60 flex items-center gap-2 shrink-0`}>
             {state.running && <LoaderCircle size={16} className="animate-spin" />}
-            {state.running ? "Auditing..." : p ? "Run again" : "Run my money audit"}
+            {state.running ? "Writing..." : p ? "Redo my plan" : "Write my plan"}
           </button>
         </div>
         {state.running && <p className="text-sm text-muted" aria-live="polite">{STAGES[stage]}. This takes a minute or two; you can leave the page.</p>}
         {state.error && <p className="text-sm text-bad" role="alert">{state.error}</p>}
-        {state.stale && !state.running && <p className="text-sm text-bad">{state.stale} Run it again to use your current accounts.</p>}
+        {state.stale && !state.running && <p className="text-sm text-bad">{state.stale} Redo it to use your current accounts.</p>}
         {!state.ready && <p className="text-sm text-muted">The money plan needs a database update. Open Setup to apply it.</p>}
-        {p?.note && !state.running && (
-          <p className="flex gap-2 items-start rounded-2xl bg-amber-50 text-amber-600 px-4 py-3 text-sm" role="note">
-            <TriangleAlert size={16} className="mt-0.5 shrink-0" />
-            <span><span className="font-medium">{p.note}</span> Moves built on those numbers are marked low confidence and not counted.</span>
-          </p>
-        )}
-        {p?.summary && !state.running && <p className="text-sm">{p.summary}</p>}
-      </section>
+        {p?.note && !state.running && <p className="text-sm text-muted">{p.note} Steps built on those numbers aren&apos;t counted.</p>}
+      </div>
 
-      {p && moves.length > 0 && <PayoffChart moves={[...(state.done ?? []).filter((d) => !moves.some((m) => m.id === d.id)), ...moves]} today={today} rate={payoff.rate} later={payoff.later} note={p.note ?? null} />}
-
-      {!p ? (
-        <section className="card p-6 space-y-3">
-          <div className="card-title">What the audit looks at</div>
-          <ul className="text-sm space-y-2">
-            {LOOKS_AT.map((l) => (
-              <li key={l} className="flex gap-2.5"><Check size={16} className="mt-0.5 shrink-0 text-good" />{l}</li>
-            ))}
-          </ul>
-          <p className="text-sm text-muted">Moves come in the usual order: stop the bleeding, a starter emergency fund, your match, debt, a full fund, tax-advantaged saving, then smaller wins. Each one has its value, the steps and any message to send. broke never acts for you: you choose what to do.</p>
-        </section>
-      ) : (
-        <div className="grid grid-cols-1 gap-6 @5xl:grid-cols-[1.6fr_1fr] items-start">
-          <div className="space-y-6 min-w-0">
-            {first && (
-              <div className="space-y-3">
-                <div className="flex items-baseline justify-between gap-3 px-1">
-                  <div className="section-label">Do this first</div>
-                  <div className="text-sm text-muted">Step {stepOf(first)}: {STEP_LABEL[stepOf(first)]}</div>
-                </div>
-                <section className="card overflow-hidden ring-2 ring-brand/30">{row(first, 0)}</section>
-              </div>
-            )}
-            {ladder.map((x) => (
-              <div key={x.k} className="space-y-3">
-                <div className="flex items-baseline justify-between gap-3 px-1">
-                  <div className="section-label">{x.k}. {STEP_LABEL[x.k]}</div>
-                  <Total ms={x.ms} />
-                </div>
-                <section className="card overflow-hidden">{x.ms.map(row)}</section>
-              </div>
-            ))}
-            {!live.length && <p className="card p-6 text-sm text-muted">{moves.length ? "Nothing left to do. Run the audit again after your next statement." : "This audit found no moves."}</p>}
-            {closed.length > 0 && (
-              <div className="space-y-3">
-                <button onClick={() => setShowDone(!showDone)} aria-expanded={showDone} className="w-full flex items-baseline justify-between gap-3 px-1 text-left">
-                  <span className="section-label flex items-center gap-1.5">
-                    Done <span className="tabular">{closed.filter((m) => m.status === "done").length}</span>
-                    <ChevronDown size={14} className={`transition-transform ${showDone ? "rotate-180" : ""}`} />
-                  </span>
-                  <span className="text-sm text-muted tabular">Saved {money0(saved)} a year</span>
-                </button>
-                {showDone && <section className="card overflow-hidden">{closed.map(row)}</section>}
-              </div>
-            )}
+      {p && live.length > 0 && (
+        <>
+          <div className="px-6 md:px-7 pb-2 flex items-baseline justify-between gap-3">
+            <span className="section-label">Next steps</span>
+            {yearly >= 100 && <span className="text-sm text-muted tabular">About {money0(yearly)} a year when they&apos;re done{once > 0 ? `, plus ${money0(once)} once` : ""}</span>}
           </div>
-
-          {timeline.length > 0 && (
-            <div className="space-y-3 @5xl:sticky @5xl:top-6">
-              <div className="section-label px-1">Timeline</div>
-              <section className="card p-5 space-y-5">
-                {timeline.map(({ w, ms }) => (
-                  <div key={w} className="space-y-1">
-                    <div className="text-sm font-medium">{WHEN_LABEL[w]}</div>
-                    <ul>
-                      {ms.map((m) => (
-                        <li key={m.id}>
-                          <button onClick={() => jump(m.id)} className="w-full flex items-center gap-2.5 py-1.5 text-left text-sm group">
-                            <span className="size-2 rounded-full shrink-0" style={{ background: SECTION_COLOR[sectionOf(m)] }} />
-                            <span className="flex-1 min-w-0 truncate group-hover:underline underline-offset-4">{m.title}</span>
-                            <span className="text-xs text-muted tabular whitespace-nowrap">{m.deadline ? short(m.deadline) : m.effort}</span>
-                          </button>
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                ))}
-              </section>
-            </div>
+          <ol className="border-t border-line">{shown.map((m, i) => row(m, i, i + 1))}</ol>
+          {live.length > 5 && (
+            <button onClick={() => setAll(!all)} className="w-full border-t border-line px-6 py-3 text-sm text-muted hover:text-ink text-left">
+              {all ? "Show fewer" : `Show ${live.length - 5} more`}
+            </button>
           )}
+        </>
+      )}
+      {p && !live.length && <p className="px-6 md:px-7 pb-6 text-sm text-muted">{moves.length ? "Nothing left to do. Redo your plan after your next statement." : "Your plan found nothing to change."}</p>}
+
+      {closed.length > 0 && (
+        <div className="border-t border-line">
+          <button onClick={() => setShowDone(!showDone)} aria-expanded={showDone} className="w-full flex items-center justify-between gap-3 px-6 md:px-7 py-3 text-left text-sm text-muted hover:text-ink">
+            <span className="flex items-center gap-1.5">Done <span className="tabular">{closed.filter((m) => m.status === "done").length}</span><ChevronDown size={14} className={`transition-transform ${showDone ? "rotate-180" : ""}`} /></span>
+            {saved > 0 && <span className="tabular">Saved {money0(saved)} a year</span>}
+          </button>
+          {showDone && <div className="border-t border-line">{closed.map((m, i) => row(m, i))}</div>}
         </div>
       )}
-      <p className="text-xs text-muted px-1">General education, not financial advice. Values are estimates from your own transactions and stated assumptions; a move only counts what your spare money can cover.{moves.some((m) => m.kind === "tax") && " Tax moves use 2026 US federal rules from irs.gov. broke never files or pays anything for you."}</p>
-    </div>
+      <p className="px-6 md:px-7 py-3 border-t border-line text-xs text-muted">General education, not financial advice. Amounts are estimates from your own transactions.</p>
+    </section>
   );
 }
 
-function Total({ ms }: { ms: PlanMove[] }) {
-  const { money0 } = useMoney();
-  const y = value(ms, false), o = value(ms, true);
-  if (!y && !o) return null;
-  return <div className="text-sm text-muted tabular">{[y ? `${money0(y)} a year` : "", o ? `${money0(o)} once` : ""].filter(Boolean).join(" + ")}</div>;
-}
-
-function MoveRow({ m, first, open, toggle, setStatus, setSteps, short, today, name, looksDone }: {
-  m: PlanMove; first: boolean; open: boolean; toggle: () => void; setStatus: (m: PlanMove, s: Status) => void; setSteps: (m: PlanMove, s: number[]) => void;
+function MoveRow({ m, n, first, open, toggle, setStatus, setSteps, short, today, name, looksDone }: {
+  m: PlanMove; n?: number; first: boolean; open: boolean; toggle: () => void; setStatus: (m: PlanMove, s: Status) => void; setSteps: (m: PlanMove, s: number[]) => void;
   short: (d: string) => string; today: string; name: string; looksDone: boolean;
 }) {
   const { money0 } = useMoney();
@@ -320,9 +238,10 @@ function MoveRow({ m, first, open, toggle, setStatus, setSteps, short, today, na
   const chip = "rounded-full border border-line px-2 py-0.5";
   const amount = Number(m.yearly_impact);
   return (
-    <div id={`move-${m.id}`} className={`scroll-mt-6 ${first ? "" : "border-t border-line"} ${m.status === "dismissed" ? "opacity-60" : ""}`}>
+    <li id={`move-${m.id}`} className={`list-none scroll-mt-6 ${first ? "" : "border-t border-line"} ${m.status === "dismissed" ? "opacity-60" : ""}`}>
       <button onClick={toggle} aria-expanded={open} className="w-full text-left px-5 py-4 flex gap-3.5 items-start row-hover">
-        <CategoryIcon icon={SECTION_ICON[sectionOf(m)]} color={SECTION_COLOR[sectionOf(m)]} size={36} />
+        {n ? <span className={`grid place-items-center size-7 rounded-full text-sm tabular shrink-0 ${n === 1 ? "bg-ink text-on-ink" : "border border-line text-muted"}`}>{n}</span>
+          : <CategoryIcon icon={SECTION_ICON[sectionOf(m)]} color={SECTION_COLOR[sectionOf(m)]} size={28} />}
         <span className="flex-1 min-w-0 space-y-1">
           <span className="flex items-start gap-3">
             <span className={`flex-1 min-w-0 font-medium ${done ? "line-through decoration-muted" : ""}`}>{m.title}</span>
@@ -334,7 +253,6 @@ function MoveRow({ m, first, open, toggle, setStatus, setSteps, short, today, na
             <span className={chip}>{m.effort}</span>
             {m.deadline && <span className={`${chip} flex items-center gap-1`}><CalendarDays size={12} />By {short(m.deadline)}</span>}
             {ticked.length > 0 && <span className={`${chip} tabular`}>{ticked.length} of {m.steps.length} steps</span>}
-            {amount === 0 && <span className={chip}>Not counted in the total</span>}
             {m.status === "doing" && <span className="rounded-full bg-brand-soft text-brand px-2 py-0.5">Started</span>}
             {done && <span className="rounded-full bg-green-50 text-good px-2 py-0.5">Done</span>}
             {m.status === "dismissed" && <span className="rounded-full bg-canvas px-2 py-0.5">Not for me</span>}
@@ -406,6 +324,6 @@ function MoveRow({ m, first, open, toggle, setStatus, setSteps, short, today, na
           </div>
         </div>
       )}
-    </div>
+    </li>
   );
 }

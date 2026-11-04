@@ -41,3 +41,10 @@ assert.equal(updateEnvText("", { SUPABASE_DB_URL: "postgresql://u:p$ss#1@h:5432/
 assert.equal(parseEnv(updateEnvText("", { SUPABASE_DB_URL: "postgresql://u:p$ss#1@h:5432/db" })).SUPABASE_DB_URL, "postgresql://u:p$ss#1@h:5432/db");
 assert.ok(validate({ SUPABASE_DB_URL: 'postgresql://u:a"b@h/db' }).errors.SUPABASE_DB_URL);
 console.log("envfile: ok");
+
+// The Project URL from the dashboard address, the bare ref, or the URL itself.
+const REF = "macoucuuhxtmvihabcde";
+assert.equal(validate({ NEXT_PUBLIC_SUPABASE_URL: `https://supabase.com/dashboard/project/${REF}/settings/api-keys` }).clean.NEXT_PUBLIC_SUPABASE_URL, `https://${REF}.supabase.co`);
+assert.equal(validate({ NEXT_PUBLIC_SUPABASE_URL: REF }).clean.NEXT_PUBLIC_SUPABASE_URL, `https://${REF}.supabase.co`);
+assert.equal(validate({ NEXT_PUBLIC_SUPABASE_URL: `https://${REF}.supabase.co/` }).clean.NEXT_PUBLIC_SUPABASE_URL, `https://${REF}.supabase.co`);
+assert.equal(validate({ NEXT_PUBLIC_SUPABASE_URL: "http://127.0.0.1:54321" }).clean.NEXT_PUBLIC_SUPABASE_URL, "http://127.0.0.1:54321");
