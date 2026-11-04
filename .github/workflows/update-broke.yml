@@ -1,0 +1,22 @@
+# The "Update broke" button for a copy in your own GitHub: Actions, Update broke, Run workflow.
+# It pulls in the latest broke and keeps your changes. Vercel then rebuilds your site by itself.
+name: Update broke
+on: workflow_dispatch
+permissions:
+  contents: write
+jobs:
+  update:
+    if: github.repository != 'nextwork-projects/broke'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: |
+          git config user.name "broke update"
+          git config user.email "broke-update@users.noreply.github.com"
+          node scripts/update.mjs --ci
+          git push

@@ -1,0 +1,109 @@
+@import "tailwindcss";
+
+:root {
+  /* Motion tokens. */
+  --dur-min: .15s;
+  --dur: .3s;
+  --dur-long: .6s;
+  --ease-out: cubic-bezier(.33,1,.68,1);
+  --ease-in-out: cubic-bezier(.65,0,.35,1);
+  --hover: #0000000a;
+  --hover-strong: #00000014;
+  --canvas: #f3f3f2;
+  --surface: #ffffff;
+  --ink: #141414;
+  --muted: #6f6f6f;
+  --line: #ececea;
+  --brand: #5b6cf0;
+  --brand-soft: #e9ecfd;
+  --chart: #6f8cf2;
+  --chart-soft: #e6ecfd;
+  --good: #15803d; /* 5:1 on white; #16a34a was 3.3:1 */
+  --bad: #dc2626;
+  --plum: #2b1840;
+  --on-ink: #ffffff; /* text on bg-ink */
+  --chart-mute: #c7d3fa;
+  --shadow-card: 0 1px 2px #0000000a, 0 6px 20px -8px #00000014;
+  --shadow-pop: 0 1px 3px #0000000f, 0 18px 44px -14px #00000038;
+  --backdrop: #0000004d; /* behind a modal */
+  color-scheme: light;
+}
+
+/* Dark: follows the system unless data-theme="light"; data-theme="dark" forces it. */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --hover: #ffffff0d; --hover-strong: #ffffff1a; --canvas: #121214; --surface: #1d1d21; --ink: #ececec; --muted: #9b9ba1;
+    --line: #2e2e34; --brand: #8b98ff; --brand-soft: #272b4d; --chart: #7f98f6; --chart-soft: #262d4a; --chart-mute: #3b4675;
+    /* Dark lifts cards with a top highlight, not a shadow. */
+    --shadow-card: inset 0 1px 0 #ffffff0a, 0 1px 2px #00000059; --shadow-pop: inset 0 1px 0 #ffffff0f, 0 18px 44px -14px #000000b3;
+    --good: #4ade80; --bad: #f87171; --on-ink: #141414; --backdrop: #000000a6; color-scheme: dark;
+    /* Tailwind's pale status tints, dimmed for dark surfaces. */
+    --color-green-50: #4ade801a; --color-green-100: #4ade8033; --color-red-50: #f871711f; --color-amber-50: #f59e0b1f; --color-amber-600: #fbbf24;
+  }
+}
+:root[data-theme="dark"] {
+  --hover: #ffffff0d; --hover-strong: #ffffff1a; --canvas: #121214; --surface: #1d1d21; --ink: #ececec; --muted: #9b9ba1;
+  --line: #2e2e34; --brand: #8b98ff; --brand-soft: #272b4d; --chart: #7f98f6; --chart-soft: #262d4a; --chart-mute: #3b4675;
+    /* Dark lifts cards with a top highlight, not a shadow. */
+    --shadow-card: inset 0 1px 0 #ffffff0a, 0 1px 2px #00000059; --shadow-pop: inset 0 1px 0 #ffffff0f, 0 18px 44px -14px #000000b3;
+  --good: #4ade80; --bad: #f87171; --on-ink: #141414; --backdrop: #000000a6; color-scheme: dark;
+  --color-green-50: #4ade801a; --color-green-100: #4ade8033; --color-red-50: #f871711f; --color-amber-50: #f59e0b1f; --color-amber-600: #fbbf24;
+}
+
+@theme inline {
+  --color-canvas: var(--canvas);
+  --color-surface: var(--surface);
+  --color-ink: var(--ink);
+  --color-muted: var(--muted);
+  --color-line: var(--line);
+  --color-brand: var(--brand);
+  --color-brand-soft: var(--brand-soft);
+  --color-chart: var(--chart);
+  --color-good: var(--good);
+  --color-bad: var(--bad);
+  --color-plum: var(--plum);
+  --color-on-ink: var(--on-ink);
+  --font-sans: var(--font-figtree);
+}
+
+/* Keyboard users get a visible focus ring; mouse clicks don't. */
+:focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; border-radius: 8px; }
+/* Text fields show focus with their own border instead of a second ring around it. */
+input:not([type="checkbox"]):not([type="radio"]):focus-visible, textarea:focus-visible, select:focus-visible { outline: none; }
+@media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; } }
+
+body {
+  background: var(--surface);
+  color: var(--ink);
+  font-family: var(--font-figtree), system-ui, sans-serif;
+}
+
+@keyframes fade { from { opacity: 0; transform: translateY(2px); } to { opacity: 1; transform: none; } }
+@keyframes slide { from { transform: translateX(-100%); } to { transform: translateX(300%); } }
+
+@layer components {
+  /* Every clickable thing eases its colour, shadow and transform the same way. */
+  a, button, [role="switch"], select, summary {
+    transition: background-color var(--dur-min) var(--ease-out), border-color var(--dur-min) var(--ease-out),
+      box-shadow var(--dur-min) var(--ease-out), color var(--dur-min) var(--ease-out), opacity var(--dur-min) var(--ease-out),
+      transform var(--dur-min) var(--ease-out);
+  }
+  button:not(:disabled):active, a:active { transform: scale(.98); }
+  .row-hover:hover, a.row-hover:focus-visible { background: var(--hover); }
+  .card-link { @apply bg-surface rounded-3xl border border-line; box-shadow: var(--shadow-card); }
+  .card-link:hover { background: linear-gradient(0deg, var(--hover), var(--hover)), var(--surface); box-shadow: var(--shadow-pop); }
+  .card { @apply bg-surface rounded-3xl border border-line; box-shadow: var(--shadow-card); }
+  .card-title { @apply text-[17px] font-semibold tracking-[-0.01em]; }
+  /* Headline money: Current Spend, Safe to Spend, balances. */
+  .figure { @apply text-[32px] leading-tight font-semibold tracking-[-0.025em] tabular-nums; }
+  .section-label { @apply text-sm font-medium text-muted; } /* sentence case, never all caps (Max, 2026-10-22) */
+  .input { @apply bg-surface border border-line rounded-full px-4 py-2 text-sm outline-none focus:border-ink; }
+  .btn-primary { @apply bg-ink text-on-ink rounded-full px-5 py-2 text-sm font-medium shadow-[inset_0_1px_0_#ffffff26] hover:bg-ink/85 hover:shadow-[inset_0_1px_0_#ffffff26,0_6px_14px_-4px_#00000040] disabled:opacity-50; }
+  .btn { @apply border border-ink/80 bg-surface rounded-full px-4 py-1.5 text-sm font-medium hover:bg-[var(--hover-strong)] disabled:opacity-50; }
+  .pill-tabs { @apply inline-flex bg-canvas rounded-full p-1 gap-1 border border-line; }
+  .pill-tab { @apply px-4 py-1.5 rounded-full text-sm text-muted hover:text-ink hover:bg-[var(--hover)]; }
+  .pill-tab-active { @apply bg-surface text-ink font-medium shadow-[var(--shadow-card)]; }
+  .select { @apply w-full bg-surface border border-line rounded-xl px-3 py-2.5 text-sm outline-none focus:border-ink; }
+  .filter { @apply bg-transparent text-sm px-3 py-1.5 rounded-full outline-none hover:bg-[var(--hover)] cursor-pointer; }
+  .tabular { font-variant-numeric: tabular-nums; }
+}

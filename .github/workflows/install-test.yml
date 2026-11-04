@@ -1,0 +1,27 @@
+# A brand-new install, with no keys, on each system: broke starts and opens its setup page.
+name: Install test
+on:
+  pull_request:
+  workflow_dispatch:
+jobs:
+  install:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Start broke with no keys and check the setup page
+        shell: bash
+        env:
+          BROKE_NO_OPEN: "1"
+        run: |
+          node scripts/start.mjs > start.log 2>&1 &
+          for i in $(seq 1 120); do grep -q "broke is running" start.log && break; sleep 3; done
+          cat start.log
+          curl -fsS http://localhost:3000/setup | grep -q "Set up broke"
+          curl -fsS http://localhost:3000/api/setup/status | grep -q '"canWrite":true'

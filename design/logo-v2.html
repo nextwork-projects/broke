@@ -1,0 +1,119 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>broke logo v2</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@800&family=JetBrains+Mono&display=swap" rel="stylesheet">
+<style>
+  body{margin:0;background:#efeeea;font-family:Inter,system-ui,sans-serif;padding:32px}
+  h2{font:600 13px 'JetBrains Mono',monospace;color:#777;margin:28px 0 12px;text-transform:uppercase;letter-spacing:.06em}
+  .row{display:flex;flex-wrap:wrap;gap:16px}
+  .t{width:220px;height:220px;border-radius:22px;position:relative;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px}
+  .t .n{position:absolute;top:14px;left:16px;font:11px 'JetBrains Mono',monospace;opacity:.55}
+  .t .w{font-weight:800;font-size:34px;letter-spacing:-.03em;line-height:1}
+  .t svg{width:120px;height:96px}
+  .dark{background:#141414;color:#fff}.light{background:#fff;color:#3d8a55}
+  .blue{background:#5b6cf0;color:#fff}.green{background:#3d8a55;color:#fff}
+  .lightb{background:#fff;color:#1a1a1a}.cream{background:#fbf8f1;color:#3d8a55}
+</style></head><body>
+
+<svg width="0" height="0" style="position:absolute"><defs>
+  <!-- card split by a zigzag crack; halves drawn separately -->
+  <path id="cardL" d="M20,22 L50,22 L46,32 L53,40 L47,50 L52,62 L20,62 Q15,62 15,57 L15,27 Q15,22 20,22Z"/>
+  <path id="cardR" d="M50,22 L80,22 Q85,22 85,27 L85,57 Q85,62 80,62 L52,62 L47,50 L53,40 L46,32Z"/>
+  <!-- straight diagonal split (closest to 32) -->
+  <path id="sL" d="M20,22 L52,22 L46,62 L20,62 Q15,62 15,57 L15,27 Q15,22 20,22Z"/>
+  <path id="sR" d="M54,22 L80,22 Q85,22 85,27 L85,57 Q85,62 80,62 L48,62Z"/>
+  <!-- wallet outline (closest to 04) -->
+  <g id="wallet" fill="none" stroke="currentColor" stroke-width="5" stroke-linejoin="round" stroke-linecap="round">
+    <path d="M30,26 L64,15 L68,26"/>
+    <rect x="18" y="26" width="64" height="42" rx="9"/>
+    <path d="M82,38 H66 a8,8 0 0 0 0,16 H82"/>
+    <circle cx="67" cy="46" r="1.5" fill="currentColor"/>
+  </g>
+</defs></svg>
+
+<h2>A · the split card (from 32)</h2>
+<div class="row">
+  <div class="t dark"><span class="n">A1</span>
+    <svg viewBox="0 0 100 80"><g transform="translate(-4 2) rotate(-9 30 42)"><use href="#sL" fill="#5b6cf0"/><rect x="21" y="30" width="9" height="7" rx="1.5" fill="#f5c451"/></g>
+      <g transform="translate(4 -2) rotate(8 70 42)"><use href="#sR" fill="#8b98ff"/><rect x="60" y="51" width="18" height="3" rx="1.5" fill="#fff"/></g></svg>
+    <span class="w">broke</span></div>
+
+  <div class="t dark"><span class="n">A2</span>
+    <svg viewBox="0 0 100 80"><g transform="translate(-3 0) rotate(-6 30 42)"><use href="#cardL" fill="#5b6cf0"/><rect x="21" y="30" width="9" height="7" rx="1.5" fill="#f5c451"/></g>
+      <g transform="translate(3 0) rotate(6 70 42)"><use href="#cardR" fill="#8b98ff"/><rect x="60" y="51" width="18" height="3" rx="1.5" fill="#fff"/></g></svg>
+    <span class="w">broke</span></div>
+
+  <div class="t dark"><span class="n">A3</span>
+    <svg viewBox="0 0 100 80"><g transform="translate(-6 -4) rotate(-14 30 42)"><use href="#sL" fill="#5b6cf0"/><rect x="21" y="30" width="9" height="7" rx="1.5" fill="#f5c451"/></g>
+      <g transform="translate(6 -4) rotate(14 70 42)"><use href="#sR" fill="#8b98ff"/></g>
+      <circle cx="50" cy="66" r="4" fill="#f5c451"/><circle cx="44" cy="76" r="3" fill="#f5c451" opacity=".7"/></svg>
+    <span class="w">broke</span></div>
+
+  <div class="t dark"><span class="n">A4</span>
+    <svg viewBox="0 0 100 80"><g fill="none" stroke="#8b98ff" stroke-width="4.5" stroke-linejoin="round">
+      <g transform="translate(-4 0) rotate(-7 30 42)"><use href="#cardL"/></g>
+      <g transform="translate(4 0) rotate(7 70 42)"><use href="#cardR"/></g></g></svg>
+    <span class="w">broke</span></div>
+
+  <div class="t blue"><span class="n">A5</span>
+    <svg viewBox="0 0 100 80"><g transform="translate(-4 2) rotate(-9 30 42)"><use href="#sL" fill="#fff"/><rect x="21" y="30" width="9" height="7" rx="1.5" fill="#5b6cf0"/></g>
+      <g transform="translate(4 -2) rotate(8 70 42)"><use href="#sR" fill="#fff" opacity=".7"/></g></svg>
+    <span class="w">broke</span></div>
+
+  <div class="t lightb"><span class="n">A6</span>
+    <svg viewBox="0 0 100 80"><g transform="translate(-4 2) rotate(-9 30 42)"><use href="#sL" fill="#5b6cf0"/><rect x="21" y="30" width="9" height="7" rx="1.5" fill="#f5c451"/></g>
+      <g transform="translate(4 -2) rotate(8 70 42)"><use href="#sR" fill="#8b98ff"/><rect x="60" y="51" width="18" height="3" rx="1.5" fill="#fff"/></g></svg>
+    <span class="w">broke</span></div>
+</div>
+
+<h2>B · the wallet (from 04)</h2>
+<div class="row">
+  <div class="t light"><span class="n">B1</span>
+    <svg viewBox="0 0 100 80"><use href="#wallet"/></svg><span class="w">broke</span></div>
+
+  <div class="t light"><span class="n">B2</span>
+    <svg viewBox="0 0 100 80"><use href="#wallet" transform="translate(0 4)"/>
+      <g stroke="#3d8a55" stroke-width="3.5" stroke-linecap="round"><path d="M40,12 L37,4"/><path d="M50,10 V1"/><path d="M60,12 L63,4"/></g></svg>
+    <span class="w">broke</span></div>
+
+  <div class="t light"><span class="n">B3</span>
+    <svg viewBox="0 0 100 80"><use href="#wallet"/>
+      <path d="M44,27 L38,38 L46,46 L40,58 L44,67" fill="none" stroke="#3d8a55" stroke-width="3.5" stroke-linejoin="round" stroke-linecap="round"/></svg>
+    <span class="w">broke</span></div>
+
+  <div class="t light"><span class="n">B4</span>
+    <svg viewBox="0 0 100 80"><path d="M30,26 L64,15 L68,26Z" fill="#7fbf8f"/><rect x="18" y="26" width="64" height="42" rx="9" fill="#3d8a55"/>
+      <path d="M82,38 H66 a8,8 0 0 0 0,16 H82Z" fill="#2c6a40"/><circle cx="67" cy="46" r="2.5" fill="#fff"/></svg>
+    <span class="w">broke</span></div>
+
+  <div class="t light"><span class="n">B5</span>
+    <svg viewBox="0 0 100 80"><g transform="rotate(-12 50 46)"><use href="#wallet"/></g>
+      <circle cx="80" cy="72" r="5" fill="none" stroke="#3d8a55" stroke-width="3.5"/></svg>
+    <span class="w">broke</span></div>
+
+  <div class="t green"><span class="n">B6</span>
+    <svg viewBox="0 0 100 80" style="color:#fff"><use href="#wallet"/></svg><span class="w">broke</span></div>
+</div>
+
+<h2>C · mixes</h2>
+<div class="row">
+  <div class="t cream"><span class="n">C1</span>
+    <svg viewBox="0 0 100 80"><clipPath id="cl"><path d="M0,0 H48 L44,28 L52,44 L46,80 H0Z"/></clipPath><clipPath id="cr"><path d="M48,0 H100 V80 H46 L52,44 L44,28Z"/></clipPath>
+      <g clip-path="url(#cl)" transform="translate(-3 1) rotate(-6 30 46)"><use href="#wallet"/></g>
+      <g clip-path="url(#cr)" transform="translate(3 -1) rotate(6 70 46)"><use href="#wallet"/></g></svg>
+    <span class="w">broke</span></div>
+
+  <div class="t dark"><span class="n">C2</span>
+    <svg viewBox="0 0 100 80" style="color:#8b98ff"><use href="#wallet"/></svg><span class="w">broke</span></div>
+
+  <div class="t light"><span class="n">C3</span>
+    <svg viewBox="0 0 100 80"><g transform="translate(-4 2) rotate(-9 30 42)"><use href="#sL" fill="#3d8a55"/><rect x="21" y="30" width="9" height="7" rx="1.5" fill="#f5c451"/></g>
+      <g transform="translate(4 -2) rotate(8 70 42)"><use href="#sR" fill="#7fbf8f"/><rect x="60" y="51" width="18" height="3" rx="1.5" fill="#fff"/></g></svg>
+    <span class="w">broke</span></div>
+
+  <div class="t dark"><span class="n">C4</span>
+    <svg viewBox="0 0 100 80"><clipPath id="cl2"><path d="M0,0 H48 L44,28 L52,44 L46,80 H0Z"/></clipPath><clipPath id="cr2"><path d="M48,0 H100 V80 H46 L52,44 L44,28Z"/></clipPath>
+      <g clip-path="url(#cl2)" transform="translate(-3 1) rotate(-6 30 46)" style="color:#5b6cf0"><use href="#wallet"/></g>
+      <g clip-path="url(#cr2)" transform="translate(3 -1) rotate(6 70 46)" style="color:#8b98ff"><use href="#wallet"/></g></svg>
+    <span class="w">broke</span></div>
+</div>
+</body></html>
