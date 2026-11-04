@@ -44,3 +44,19 @@ export function plaidError(e: unknown): { code: string; message: string } {
   if (typeof code === "string" && code.startsWith("AKAHU_") && e instanceof Error) return { code, message: e.message };
   return { code: "ERROR", message: e instanceof Error ? e.message : "Plaid request failed" };
 }
+
+/** Revokes a bank connection at Plaid. Akahu tokens belong to the server owner, and a test connection can't be revoked
+ * from live mode (Plaid's sandbox forgets it anyway), so those are only forgotten. Already gone at Plaid counts as done. */
+export async function revokeItem(item: { access_token: string | null; provider: string | null }) {
+  const testInLive = item.access_token?.startsWith("access-sandbox-") && process.env.PLAID_ENV !== "sandbox";
+  if (item.provider !== "plaid" || testInLive || !item.access_token) return { ok: true as const };
+  try {
+    await plaid.itemRemove({ access_token: item.access_token });
+    return { ok: true as const };
+  } catch (e) {
+    const err = plaidError(e);
+    if (err.code === "ITEM_NOT_FOUND" || err.code === "INVALID_ACCESS_TOKEN") return { ok: true as const };
+    console.error("[broke] item remove:", err);
+    return { ok: false as const };
+  }
+}

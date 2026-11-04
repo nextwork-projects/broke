@@ -92,3 +92,38 @@ export function ClearTestData({ items }: { items: { id: string; name: string }[]
     </div>
   );
 }
+
+// Settings, Database: everything broke holds about your money, for your account only. Two presses, so it can't happen by accident.
+export function ClearMyData() {
+  const router = useRouter();
+  const [confirm, setConfirm] = useState(false);
+  const [state, setState] = useState<"idle" | "busy" | "done">("idle");
+  const [err, setErr] = useState("");
+  async function clear() {
+    setState("busy");
+    setErr("");
+    const res = await fetch("/api/clear-data", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ confirm: "clear" }) }).catch(() => null);
+    if (res?.ok) {
+      setState("done");
+      router.refresh();
+    } else {
+      setState("idle");
+      setErr(((await res?.json().catch(() => null)) as { error?: string } | null)?.error ?? "Couldn't clear your data. Try again.");
+    }
+  }
+  if (state === "done") return <p className="text-sm text-good inline-flex items-center gap-1"><Check size={13} /> Cleared. Link a bank, or use a test bank, from Accounts.</p>;
+  return (
+    <div className="space-y-2 text-sm">
+      {confirm ? (
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-muted">Disconnect every bank and delete all of it? This can&apos;t be undone.</span>
+          <button className="btn text-bad" disabled={state === "busy"} onClick={clear}>{state === "busy" ? "Clearing..." : "Clear my data"}</button>
+          <button className="text-muted hover:text-ink" disabled={state === "busy"} onClick={() => setConfirm(false)}>Cancel</button>
+        </div>
+      ) : (
+        <button className="btn" onClick={() => setConfirm(true)}>Clear my data</button>
+      )}
+      {err && <p className="text-bad">{err}</p>}
+    </div>
+  );
+}

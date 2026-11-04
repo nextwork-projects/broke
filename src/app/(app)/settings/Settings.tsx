@@ -2,7 +2,7 @@
 
 import { Wrench, Bot, Check, CircleAlert, X, Database, Landmark, Link2, Palette, RefreshCw, SlidersHorizontal, User, type LucideIcon } from "lucide-react";
 import Link from "next/link";
-import { ClearTestData, RemoveTest } from "@/components/ClearTestData";
+import { ClearMyData, ClearTestData, RemoveTest } from "@/components/ClearTestData";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 import { modelOptions, saveChoice } from "@/components/Assistant";
@@ -65,7 +65,7 @@ export function Settings({ signedIn, local, folder, repo, email, profile, mode, 
     else setChecking(false);
     const fromHash = () => {
       const h = location.hash.slice(1) as Group;
-      if (NAV.some((n) => n.id === h) && (local || !SERVER.includes(h) || h === "banks")) setGroup(h);
+      if (NAV.some((n) => n.id === h) && (local || !SERVER.includes(h) || h === "banks" || h === "database")) setGroup(h);
     };
     fromHash();
     addEventListener("hashchange", fromHash);
@@ -77,7 +77,7 @@ export function Settings({ signedIn, local, folder, repo, email, profile, mode, 
     if (local && group === "banks") load();
   }, [group, local, load]);
 
-  const nav = local ? NAV : NAV.filter((n) => !SERVER.includes(n.id) || n.id === "banks");
+  const nav = local ? NAV : NAV.filter((n) => !SERVER.includes(n.id) || n.id === "banks" || n.id === "database");
   const sections = (data?.sections ?? []).filter((s) => groupOf(s) === group);
   const flagged = (g: Group) => (data?.sections ?? []).some((s) => groupOf(s) === g && attention(s));
   const here = NAV.find((n) => n.id === group)!;
@@ -125,6 +125,11 @@ export function Settings({ signedIn, local, folder, repo, email, profile, mode, 
           </Card>
         )}
         {group === "improve" && <ImproveCard folder={folder} repo={repo} />}
+        {group === "database" && (
+          <Card title="Clear my data" what="Disconnects every bank and deletes your accounts, transactions, bills, budgets, rules, plans and chats. Your sign-in, profile answers and AI connection stay. Only your own data is touched.">
+            <ClearMyData />
+          </Card>
+        )}
         {group === "ai" && <AiDataCard initial={aiMode} />}
         {group === "ai" && <ModelCard />}
         {!local && (SERVER.includes(group) || group === "ai") && (
