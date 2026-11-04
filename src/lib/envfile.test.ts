@@ -48,3 +48,9 @@ assert.equal(validate({ NEXT_PUBLIC_SUPABASE_URL: `https://supabase.com/dashboar
 assert.equal(validate({ NEXT_PUBLIC_SUPABASE_URL: REF }).clean.NEXT_PUBLIC_SUPABASE_URL, `https://${REF}.supabase.co`);
 assert.equal(validate({ NEXT_PUBLIC_SUPABASE_URL: `https://${REF}.supabase.co/` }).clean.NEXT_PUBLIC_SUPABASE_URL, `https://${REF}.supabase.co`);
 assert.equal(validate({ NEXT_PUBLIC_SUPABASE_URL: "http://127.0.0.1:54321" }).clean.NEXT_PUBLIC_SUPABASE_URL, "http://127.0.0.1:54321");
+
+// The database password goes into the connection string, URL-encoded, and is never saved on its own.
+const db = validate({ SUPABASE_DB_URL: "postgresql://postgres.abc:[YOUR-PASSWORD]@aws-0-us-east-1.pooler.supabase.com:5432/postgres", SUPABASE_DB_PASSWORD: "p@ss w/rd" });
+assert.equal(db.clean.SUPABASE_DB_URL, "postgresql://postgres.abc:p%40ss%20w%2Frd@aws-0-us-east-1.pooler.supabase.com:5432/postgres");
+assert.equal("SUPABASE_DB_PASSWORD" in db.clean, false);
+assert.ok(validate({ SUPABASE_DB_URL: "postgresql://postgres.abc:[YOUR-PASSWORD]@h.pooler.supabase.com:5432/postgres" }).errors.SUPABASE_DB_URL);

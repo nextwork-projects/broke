@@ -12,7 +12,7 @@ import { akahuGet } from "@/lib/providers/akahu";
 
 export type StepStatus = "done" | "todo" | "error" | "optional";
 export type Part = string | { href: string; label: string };
-export type Field = { key: string; label: string; secret: boolean; set: boolean; hint: string | null; placeholder?: string; options?: string[] };
+export type Field = { key: string; label: string; secret: boolean; set: boolean; hint: string | null; placeholder?: string; options?: string[]; help?: string };
 export type HowTo = { text: string; href?: string; command?: string };
 export type AiRow = { id: string; label: string; ready: boolean; reason?: string; howTo?: HowTo[] };
 export type Section = {
@@ -101,15 +101,14 @@ export async function setupStatus(signedIn: boolean): Promise<SetupStatus> {
     status: sb?.ok ? "done" : sb ? "error" : "todo",
     note: sb?.ok ? (ref ? `Project ${ref}` : sb.message) : sb?.message,
     steps: [
-      ["Make a free account and project at ", { href: "https://supabase.com/dashboard/new", label: "supabase.com" }, ". Any name works. Save the database password it gives you."],
-      ["Open ", { href: dash("/settings/api-keys"), label: "Project Settings → API Keys" }, " and copy the publishable and secret keys."],
-      ["For the Project URL, copy the address from your browser's address bar on that page. broke works out the rest."],
-      ["Paste all three below and press Save."],
+      ["Make a free account and a new project at ", { href: "https://supabase.com/dashboard/new", label: "supabase.com" }, ". Any name works. Write down the database password you choose: you need it in the next step if the button there doesn't work."],
+      ["When the project is ready, open ", { href: dash("/settings/api-keys"), label: "Project Settings → API Keys" }, "."],
+      ["Copy three things from that page into the boxes below, then press Save."],
     ],
     fields: fields(env, ["NEXT_PUBLIC_SUPABASE_URL", "NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY", "SUPABASE_SERVICE_ROLE_KEY"], {
-      NEXT_PUBLIC_SUPABASE_URL: { placeholder: "https://supabase.com/dashboard/project/… or https://xxxx.supabase.co" },
-      NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: { placeholder: "sb_publishable_…" },
-      SUPABASE_SERVICE_ROLE_KEY: { placeholder: "sb_secret_…" },
+      NEXT_PUBLIC_SUPABASE_URL: { placeholder: "https://supabase.com/dashboard/project/…", help: "The address in your browser's address bar on the API Keys page." },
+      NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: { placeholder: "sb_publishable_…", help: "Under Publishable key. Starts with sb_publishable_." },
+      SUPABASE_SERVICE_ROLE_KEY: { placeholder: "sb_secret_…", help: "Under Secret keys: press the eye to show it, then copy. Starts with sb_secret_." },
     }),
   };
 
@@ -121,10 +120,14 @@ export async function setupStatus(signedIn: boolean): Promise<SetupStatus> {
     note: "Press the button, sign in to Supabase and approve broke. Nothing to copy.",
     action: "connect",
     steps: [
-      ["In Supabase, click ", { href: dash("?showConnect=true"), label: "Connect" }, " and copy the Session pooler URI."],
-      ["Put your database password where it says [YOUR-PASSWORD]. Lost it? ", { href: dash("/database/settings"), label: "Reset it here" }, "."],
+      ["In Supabase, press ", { href: dash("?showConnect=true"), label: "Connect" }, " at the top of your project."],
+      ["Under Method, choose Session pooler. Copy the connection string."],
+      ["Paste it below with your database password, then press Save. broke puts the password in for you and creates all its tables at once."],
     ],
-    fields: fields(env, ["SUPABASE_DB_URL"], { SUPABASE_DB_URL: { placeholder: "postgresql://postgres.xxxx:password@…pooler.supabase.com:5432/postgres" } }),
+    fields: fields(env, ["SUPABASE_DB_URL", "SUPABASE_DB_PASSWORD"], {
+      SUPABASE_DB_URL: { placeholder: "postgresql://postgres.xxxx:[YOUR-PASSWORD]@…pooler.supabase.com:5432/postgres" },
+      SUPABASE_DB_PASSWORD: { help: "The one you chose when you made the project. Forgot it? Reset it under Project Settings, Database." },
+    }),
   };
   if (!sb?.ok) database = { ...database, note: "Finish the account database first.", action: undefined };
   else if (isSet(env.SUPABASE_DB_URL) || mcpConnected(ref)) {

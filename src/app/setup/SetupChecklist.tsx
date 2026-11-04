@@ -194,24 +194,35 @@ function Steps({ steps }: { steps?: Section["steps"] }) {
 }
 
 export function Body({ s, data, signedIn, reload }: { s: Section; data: SetupStatus; signedIn: boolean; reload: () => void }) {
+  const [fallback, setFallback] = useState(false);
+  const form = s.fields && <KeyForm fields={s.fields} canWrite={data.canWrite} writeNote={data.writeNote} onSaved={reload} />;
   return (
     <>
       {s.note && s.status !== "done" && s.status !== "error" && <p className="text-sm">{s.note}</p>}
       {s.note && s.status === "done" && s.kind === "more" && <p className="text-sm">{s.note}</p>}
-      {s.action === "connect" && <ConnectSupabaseButton onDone={reload} />}
+      {s.action === "connect" && <ConnectSupabaseButton onDone={reload} onFail={() => setFallback(true)} />}
       {s.action === "connect" && (s.steps || s.fields) ? (
-        <details className="text-sm">
-          <summary className="cursor-pointer text-muted hover:text-ink">Or paste a connection string instead</summary>
+        <details className="text-sm" open={fallback} onToggle={(e) => setFallback(e.currentTarget.open)}>
+          <summary className="cursor-pointer text-muted hover:text-ink">Button didn&apos;t work? Paste a connection string instead</summary>
           <div className="pt-3 space-y-4">
             <Steps steps={s.steps} />
-            {s.fields && <KeyForm fields={s.fields} canWrite={data.canWrite} writeNote={data.writeNote} onSaved={reload} />}
+            {form}
+          </div>
+        </details>
+      ) : s.status === "done" && s.kind !== "more" && s.fields ? (
+        // Connected: the steps and empty boxes are noise now. They stay one click away for changing a key.
+        <details className="text-sm">
+          <summary className="cursor-pointer text-muted hover:text-ink">Change these keys</summary>
+          <div className="pt-3 space-y-4">
+            <Steps steps={s.steps} />
+            {form}
           </div>
         </details>
       ) : (
         <>
           <Steps steps={s.steps} />
           {s.command && <CopyCommand command={s.command} />}
-          {s.fields && <KeyForm fields={s.fields} canWrite={data.canWrite} writeNote={data.writeNote} onSaved={reload} />}
+          {form}
         </>
       )}
       {s.action === "migrate" && <MigrateButton onDone={reload} />}

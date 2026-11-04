@@ -102,6 +102,7 @@ export function KeyForm({ fields, canWrite, writeNote, onSaved }: { fields: Fiel
               </span>
             )}
           </span>
+          {f.help && !f.set && <span className="block text-xs text-muted">{f.help}</span>}
           {f.options ? (
             <Segmented
               label={f.label}
@@ -170,7 +171,7 @@ export function MigrateButton({ onDone }: { onDone: () => void }) {
 }
 
 // One click: Supabase's own sign-in page, then back to /setup with the tables created.
-export function ConnectSupabaseButton({ onDone }: { onDone: () => void }) {
+export function ConnectSupabaseButton({ onDone, onFail }: { onDone: () => void; onFail?: () => void }) {
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState("");
   return (
@@ -185,7 +186,10 @@ export function ConnectSupabaseButton({ onDone }: { onDone: () => void }) {
           const body = await res.json().catch(() => ({}));
           if (body.url) return void (window.location.href = body.url);
           setBusy(false);
-          if (!res.ok) setMsg(body.error ?? "Couldn't start the Supabase sign-in.");
+          if (!res.ok) {
+            setMsg(body.error ?? "Couldn't start the Supabase sign-in.");
+            onFail?.();
+          }
           onDone();
         }}
       >

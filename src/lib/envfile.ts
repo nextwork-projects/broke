@@ -29,8 +29,10 @@ export const ENV_KEYS: Record<string, Spec> = {
     label: "Database connection string", secret: true,
     check: (v) =>
       !/^postgres(ql)?:\/\/[^\s]+@[^\s]+$/.test(v) ? "Starts with postgresql:// (copy the Session pooler URI)"
-        : /\[YOUR-PASSWORD\]/i.test(v) ? "Replace [YOUR-PASSWORD] with your database password" : null,
+        : /\[YOUR-PASSWORD\]/i.test(v) ? "Type your database password in the box below" : null,
   },
+  // Never saved: validate() puts it into SUPABASE_DB_URL's [YOUR-PASSWORD], so nobody edits the string by hand.
+  SUPABASE_DB_PASSWORD: { label: "Database password", secret: true, check: () => null },
   PLAID_CLIENT_ID: { label: "Client ID", secret: false, check: (v) => (/^[a-f0-9]{24}$/.test(v) ? null : "24 letters and numbers, from Plaid → Developers → Keys") },
   PLAID_SECRET: { label: "Secret", secret: true, check: (v) => (/^[a-f0-9]{30}$/.test(v) ? null : "30 letters and numbers, from Plaid → Developers → Keys") },
   PLAID_ENV: { label: "Mode", secret: false, check: (v) => (/^(sandbox|production)$/.test(v) ? null : "sandbox or production") },
@@ -86,7 +88,10 @@ export function supabaseUrl(v: string) {
   return ref ? `https://${ref}.supabase.co` : v.replace(/\/+$/, "");
 }
 
-export function validate(updates: Record<string, unknown>): { clean: Record<string, string>; errors: Record<string, string> } {
+export function validate(input: Record<string, unknown>): { clean: Record<string, string>; errors: Record<string, string> } {
+  const { SUPABASE_DB_PASSWORD: pw, ...updates } = input;
+  if (typeof pw === "string" && pw && typeof updates.SUPABASE_DB_URL === "string")
+    updates.SUPABASE_DB_URL = updates.SUPABASE_DB_URL.replace(/\[YOUR-PASSWORD\]/gi, encodeURIComponent(pw));
   const clean: Record<string, string> = {};
   const errors: Record<string, string> = {};
   for (const [k, raw] of Object.entries(updates)) {
