@@ -11,6 +11,10 @@ export default function LoginPage() {
   const [firstRun, setFirstRun] = useState<string | null>(null);
   const [devLogin, setDevLogin] = useState(false);
   useEffect(() => {
+    if (new URLSearchParams(window.location.search).get("error") === "link") {
+      setState("error");
+      setMessage("That sign-in link didn't work. Each link works once, for about an hour, in the browser you asked for it from. Send a new one.");
+    }
     fetch("/api/setup/first-run").then((r) => r.json()).then((b: { supabase?: string; devLogin?: boolean }) => {
       setFirstRun(b.supabase ?? null);
       setDevLogin(!!b.devLogin);

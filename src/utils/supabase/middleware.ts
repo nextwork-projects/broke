@@ -47,7 +47,10 @@ export async function updateSession(request: NextRequest) {
   if (!user && !path.startsWith("/login") && !path.startsWith("/auth")) {
     const url = request.nextUrl.clone();
     url.pathname = "/login";
-    return NextResponse.redirect(url);
+    // Keep the cookie changes getClaims made: a sign-in Supabase no longer accepts gets cleared here, not resent forever.
+    const to = NextResponse.redirect(url);
+    response.cookies.getAll().forEach((c) => to.cookies.set(c));
+    return to;
   }
   // Signed in but no bank keys yet: app pages would be empty, so show the checklist instead.
   if (user && !path.startsWith("/api") && !(isSet(process.env.PLAID_CLIENT_ID) && isSet(process.env.PLAID_SECRET))) return toSetup(request);

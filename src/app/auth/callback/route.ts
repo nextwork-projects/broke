@@ -8,6 +8,7 @@ export async function GET(request: Request) {
     const supabase = await createClient();
     const { error } = await supabase.auth.exchangeCodeForSession(code);
     if (!error) return home(origin);
+    console.error("[broke] sign-in link:", error.message);
   }
   return NextResponse.redirect(`${origin}/login?error=link`);
 }
