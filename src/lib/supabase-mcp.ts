@@ -110,7 +110,16 @@ export async function mcpSession(): Promise<{ exec: Exec; close: () => Promise<v
 
 async function connectClient(s: Saved) {
   const client = new Client({ name: "broke", version: "1.0.0" });
-  await client.connect(new StreamableHTTPClientTransport(new URL(urlOf(s)), { authProvider: provider(s.redirect!) }));
+  try {
+    await client.connect(new StreamableHTTPClientTransport(new URL(urlOf(s)), { authProvider: provider(s.redirect!) }));
+  } catch (e) {
+    // The sign-in expired and couldn't be renewed: forget it, so the page offers Connect Supabase again.
+    if (/unauthori[sz]ed|invalid_grant|401/i.test(e instanceof Error ? e.message : String(e))) {
+      save({ tokens: undefined });
+      throw new Error("Your Supabase sign-in expired. Press Connect Supabase again.");
+    }
+    throw e;
+  }
   return client;
 }
 

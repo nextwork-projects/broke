@@ -11,11 +11,13 @@ const local = async (request: Request) => LOOPBACK.test(request.headers.get("hos
 export async function GET(request: Request) {
   if (!(await local(request))) return NextResponse.json({ error: "Only on this computer, after Connect Supabase." }, { status: 403 });
   try {
-    const [projects, orgs] = await Promise.all([listProjects(), listOrgs()]);
+    // One after the other: two at once could both renew the sign-in, and the second renewal cancels the first.
+    const projects = await listProjects();
+    const orgs = await listOrgs();
     return NextResponse.json({ projects, orgs: orgs.map((o) => o.name) });
   } catch (e) {
     console.error("[broke] supabase projects:", e instanceof Error ? e.message : e);
-    return NextResponse.json({ error: "Couldn't list your Supabase projects. Press Connect Supabase again." }, { status: 502 });
+    return NextResponse.json({ error: e instanceof Error && /expired/.test(e.message) ? e.message : "Couldn't list your Supabase projects. Press Connect Supabase again." }, { status: 502 });
   }
 }
 
@@ -28,6 +30,6 @@ export async function POST(request: Request) {
     return NextResponse.json(await fillFrom(id));
   } catch (e) {
     console.error("[broke] supabase project:", e instanceof Error ? e.message : e);
-    return NextResponse.json({ error: e instanceof Error && /cost money|organization|free projects/.test(e.message) ? e.message : "Supabase didn't answer. Try again in a moment." }, { status: 502 });
+    return NextResponse.json({ error: e instanceof Error && /cost money|organization|free projects|expired/.test(e.message) ? e.message : "Supabase didn't answer. Try again in a moment." }, { status: 502 });
   }
 }
