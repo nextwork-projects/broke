@@ -63,7 +63,9 @@ export const mcpConnected = (ref?: string) => {
 
 /** Starts the sign-in. Returns the Supabase approval page to send the browser to, or null if already signed in. */
 // ref undefined: sign in to the whole account, so broke can list projects and fill in the URL and public key itself.
-export async function startConnect(ref: string | undefined, redirect: string): Promise<string | null> {
+export async function startConnect(ref: string | undefined, redirect: string, fresh = false): Promise<string | null> {
+  // fresh: forget this sign-in, so Supabase asks again (and the person can pick a different organization).
+  if (fresh) save({ client: undefined, tokens: undefined, ref: undefined, all: undefined });
   const s = load();
   const all = !ref;
   // A new project, a change between one project and the whole account, or a new callback address needs fresh tokens.

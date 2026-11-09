@@ -11,7 +11,8 @@ export async function POST(request: Request) {
   // No project yet: sign in to the whole account, and broke picks (or makes) the project after.
   const ref = refFromUrl(currentEnv().NEXT_PUBLIC_SUPABASE_URL);
   try {
-    const url = await startConnect(ref, `http://${host}/api/setup/supabase/callback`);
+    const { fresh } = (await request.json().catch(() => ({}))) as { fresh?: boolean };
+    const url = await startConnect(fresh ? undefined : ref, `http://${host}/api/setup/supabase/callback`, !!fresh);
     return NextResponse.json(url ? { url } : { connected: true });
   } catch (e) {
     console.error("[broke] supabase connect:", e instanceof Error ? e.message : e);

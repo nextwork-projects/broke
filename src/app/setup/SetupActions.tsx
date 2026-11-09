@@ -171,20 +171,20 @@ export function MigrateButton({ onDone }: { onDone: () => void }) {
 }
 
 // One click: Supabase's own sign-in page, then back to /setup with the tables created.
-export function ConnectSupabaseButton({ onDone, onFail }: { onDone: () => void; onFail?: () => void }) {
+export function ConnectSupabaseButton({ onDone, onFail, fresh = false, label = "Connect Supabase", quiet = false }: { onDone: () => void; onFail?: () => void; fresh?: boolean; label?: string; quiet?: boolean }) {
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState("");
   return (
     <div className="flex flex-wrap items-center gap-3">
       <button
-        className="btn-primary"
+        className={quiet ? "btn" : "btn-primary"}
         disabled={busy}
         onClick={async () => {
           setBusy(true);
           setMsg("");
           // Supabase opens in its own tab, so broke stays put. Opened now, while the click still counts, or it's blocked.
           const tab = window.open("", "_blank");
-          const res = await fetch("/api/setup/supabase/connect", { method: "POST" });
+          const res = await fetch("/api/setup/supabase/connect", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ fresh }) });
           const body = await res.json().catch(() => ({}));
           if (body.url) {
             if (tab) tab.location.href = body.url;
@@ -201,7 +201,7 @@ export function ConnectSupabaseButton({ onDone, onFail }: { onDone: () => void; 
           onDone();
         }}
       >
-        {busy ? "Opening Supabase..." : "Connect Supabase"}
+        {busy ? "Opening Supabase..." : label}
       </button>
       {msg && <span className="text-sm text-bad">{msg}</span>}
     </div>
@@ -245,6 +245,10 @@ export function ProjectPicker({ onDone }: { onDone: () => void }) {
         {busy === "new" ? "Making your project… about a minute" : "Make a new free project called broke"}
       </button>
       {msg && <p className="text-sm text-bad">{msg}</p>}
+      <div className="pt-1 space-y-1">
+        <ConnectSupabaseButton onDone={onDone} fresh quiet label="Use a different Supabase organization" />
+        <p className="text-xs text-muted">Signs in to Supabase again, so you can choose the organization that has the project you want.</p>
+      </div>
     </div>
   );
 }
