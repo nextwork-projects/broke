@@ -1,5 +1,6 @@
 import { getUser } from "@/lib/data";
 import { isHosted } from "@/lib/llm/providers";
+import { updateReady } from "@/lib/updates";
 import { modeOf } from "@/lib/privacy";
 import { currentEnv, fromLocalhost, setupAccess, supabaseReady } from "@/lib/setup";
 import { createAdminClient } from "@/utils/supabase/admin";
@@ -21,6 +22,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
       signedIn={access.signedIn}
       local={local}
       folder={isHosted() ? "" : process.cwd()}
+      update={await updateReady()}
       repo={process.env.VERCEL_GIT_REPO_OWNER && process.env.VERCEL_GIT_REPO_SLUG ? `${process.env.VERCEL_GIT_REPO_OWNER}/${process.env.VERCEL_GIT_REPO_SLUG}` : null}
       email={user?.email ?? ""}
       profile={user?.user_metadata?.profile ?? {}}

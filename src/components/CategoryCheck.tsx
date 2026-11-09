@@ -130,6 +130,40 @@ export function CategoryCheck({ initial, cats: catsIn, onEmpty, title, closed = 
     ask(`Help me sort these categories. Suggest rules for what you're confident about, and ask me about anything you're not sure of.\n\nThese need checking: ${lines.join("; ")}.`);
   }
 
+  // One press for the backlog: every row that has a category is kept as it is, so only rows with no category are left for
+  // the user. Money coming in stays where the bank put it (usually a refund); pay is the "Is this your pay?" question on Home.
+  // Shows what it will do before it does it.
+  const [plan, setPlan] = useState<{ keep: string[]; left: number } | null>(null);
+  async function planAll() {
+    const id = await uid();
+    if (!id) return;
+    const all = ((await fetchChecks(db(), id, undefined, 1000)) as Checks).rows;
+    const keep = all.filter((t) => t.category && t.category.key !== "OTHER");
+    setPlan({ keep: keep.flatMap((t) => t.same), left: all.length - keep.length });
+  }
+  async function doAll() {
+    if (!plan) return;
+    const now = new Date().toISOString();
+    for (let i = 0; i < plan.keep.length; i += 200) await db().from("transactions").update({ checked_at: now }).in("id", plan.keep.slice(i, i + 200));
+    toast(plan.left ? `Done. ${plural(plan.left, "transaction")} with no category still need you.` : "Done. Every category is checked.");
+    setPlan(null);
+    const id = await uid();
+    setChecks(id ? ((await fetchChecks(db(), id, undefined, limit)) as Checks) : { rows: [], total: 0 });
+    router.refresh();
+  }
+  const fixAll = plan ? (
+    <div className="w-full flex flex-wrap items-center gap-2 text-sm">
+      <span className="text-muted">
+        {plan.keep.length ? `Keep ${plural(plan.keep.length, "transaction")} in the category your bank gave them.` : "Nothing to keep: these have no category yet."}
+        {plan.left ? ` ${plural(plan.left, "transaction")} with no category will still need you.` : ""}
+      </span>
+      {!!plan.keep.length && <button type="button" className="btn-primary" onClick={doAll}>Do it</button>}
+      <button type="button" className="text-muted hover:text-ink" onClick={() => setPlan(null)}>Cancel</button>
+    </div>
+  ) : (
+    <button type="button" onClick={planAll} className="btn">They look right</button>
+  );
+
   // More of the same list, biggest first. Anything already answered is gone from it.
   async function showMore() {
     const id = await uid();
@@ -158,14 +192,18 @@ export function CategoryCheck({ initial, cats: catsIn, onEmpty, title, closed = 
           <div id="check-title" className="card-title">{head}</div>
           <p className="text-sm text-muted">Is this right? Tips are only as good as your categories.</p>
         </div>
-        <button type="button" onClick={() => setOpen(true)} className="btn">Check them</button>
+        {!plan && <button type="button" onClick={() => setOpen(true)} className="btn">Check them</button>}
+        {fixAll}
       </section>
     );
   return (
     <section className="card px-5 md:px-6 pt-5 pb-1" aria-labelledby="check-title">
       <div id="check-title" className="card-title">{head}</div>
       <p className="text-sm text-muted mt-1">Is this right? Tips are only as good as your categories.</p>
-      <button type="button" onClick={sortWithAI} className="btn inline-flex items-center gap-1.5 mt-3"><Sparkles size={15} /> Ask AI to sort these</button>
+      <div className="flex flex-wrap items-center gap-2 mt-3">
+        {fixAll}
+        {!plan && <button type="button" onClick={sortWithAI} className="btn inline-flex items-center gap-1.5"><Sparkles size={15} /> Ask AI to sort these</button>}
+      </div>
       <ul className="mt-2">{checks.rows.map((t) => <CheckItem key={t.id} t={t} cats={cats} onAnswer={onAnswer} />)}</ul>
       {checks.rows.length < checks.total && (
         <div className="flex flex-wrap items-center justify-between gap-3 py-4 border-t border-line">

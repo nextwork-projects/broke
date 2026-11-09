@@ -60,6 +60,12 @@ export default async function Accounts() {
     supabase.from("accounts").select("id, name, custom_name, mask, type, subtype, current_balance:balance, currency, home:home_balance, included").eq("manual", true).eq("user_id", user!.id),
   ]);
   const items = (data ?? []) as unknown as Item[];
+  // How far back each bank's transactions go, so a short history doesn't read as a strange month.
+  const since = new Map(await Promise.all(items.map(async (i) => {
+    const ids = i.accounts.map((a) => a.id);
+    const { data: first } = ids.length ? await supabase.from("transactions").select("date").in("account_id", ids).order("date").limit(1) : { data: [] };
+    return [i.id, (first?.[0]?.date as string | undefined) ?? null] as const;
+  })));
   const manualItem = { id: "manual", institution_name: "Added by you", institution_logo: null, institution_color: null, last_synced_at: null, accounts: [] };
   const all = [
     ...items.flatMap((i) => i.accounts.map((a) => ({ ...a, item: i }))),
@@ -164,7 +170,7 @@ export default async function Accounts() {
                   <div className="text-xs text-muted">
                     {item.status && item.status !== "ok"
                       ? item.status === "ITEM_LOGIN_REQUIRED" ? "Sign in to your bank again to keep syncing." : (item.error ?? "This connection stopped syncing.")
-                      : `${holds(item.accounts) ? `${holds(item.accounts)} · ` : ""}${plural(item.accounts.length, "account")} · synced ${item.last_synced_at ? ago(item.last_synced_at) : "never"}`}
+                      : `${holds(item.accounts) ? `${holds(item.accounts)} · ` : ""}${plural(item.accounts.length, "account")}${since.get(item.id) ? ` · history from ${new Date(`${since.get(item.id)}T12:00:00Z`).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: "UTC" })}` : ""} · synced ${item.last_synced_at ? ago(item.last_synced_at) : "never"}`}
                   </div>
                 </div>
                 <ConnectionActions itemId={item.id} broken={item.provider === "plaid" && !!item.status && item.status !== "ok"} name={item.institution_name ?? "this bank"} />

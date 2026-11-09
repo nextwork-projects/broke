@@ -38,10 +38,12 @@ async function saveCountry(profile: Profile, country: string, currency: string) 
 export function Welcome({ profile, onDone }: { profile: Profile; onDone?: (p: Profile) => void }) {
   const router = useRouter();
   const [c, setC] = useState({ country: "", currency: "" });
+  const [guessed, setGuessed] = useState("");
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
   useEffect(() => {
     const country = guessCountry(navigator.languages ?? [navigator.language], Intl.DateTimeFormat().resolvedOptions().timeZone);
+    setGuessed(country);
     setC((x) => (x.country ? x : { country, currency: countryOf(country).currency }));
   }, []);
 
@@ -64,6 +66,7 @@ export function Welcome({ profile, onDone }: { profile: Profile; onDone?: (p: Pr
         <p className="text-sm text-muted mt-1">broke uses it for your currency, which banks you can link and which tax tips apply. You can change it later.</p>
       </div>
       <CountryField country={c.country} currency={c.currency} onChange={(country, currency) => setC({ country, currency })} />
+      {c.country && c.country === guessed && <p className="text-sm text-muted">Guessed from your computer&apos;s time zone and language. Change it if that&apos;s wrong.</p>}
       <button onClick={go} disabled={busy || !c.country || !c.currency} className="btn-primary w-full">{busy ? "Saving..." : "Continue"}</button>
       {err && <p className="text-sm text-bad">{err}</p>}
     </div>

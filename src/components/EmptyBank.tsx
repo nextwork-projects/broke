@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { DemoBankButton } from "@/components/DemoBank";
 import { FeedConnect } from "@/components/FeedConnect";
 import { ImportStatement } from "@/components/ImportStatement";
 import { AkahuButton, LinkBankButton, TestModeNote } from "@/components/PlaidButtons";
@@ -27,6 +28,7 @@ export async function EmptyBank({ title = "Link an account to get started", body
         {choices.bank === "plaid" && <LinkBankButton label={investOnly ? "Link a bank or card" : "Link a bank"} primary />}
         {choices.sandbox && <LinkBankButton sandbox label="Use a test bank (sandbox)" />}
         {choices.sandbox && <TestModeNote />}
+        {choices.demo && <DemoBankButton primary={!choices.bank && !choices.feeds.length} />}
         <ImportStatement accounts={[]} locale={country.locale} currency={country.currency} />
         {children ?? (investOnly && <Link href="/transactions" className="text-sm underline underline-offset-2">Add a transaction by hand</Link>)}
         <Link href="/accounts/add" className="text-sm text-muted underline underline-offset-2 hover:text-ink">More ways to add an account</Link>

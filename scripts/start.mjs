@@ -2,7 +2,7 @@
 // Starts broke on this computer and opens it. Before the keys are in, it runs in development mode: the setup page saves
 // keys and the server picks them up without a restart. After that it runs the faster production build.
 import { spawn, spawnSync } from "node:child_process";
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -34,7 +34,14 @@ if (await fetch(url, { redirect: "manual" }).then(() => true, () => false)) {
   openIt();
   process.exit(0);
 }
-if (ready && !npm("run", "build")) process.exit(1);
+// The last build is reused when nothing it was built from has changed since: code, packages, settings or keys.
+const newest = (p) => !existsSync(p) ? 0 : statSync(p).isDirectory()
+  ? Math.max(0, ...readdirSync(p, { recursive: true }).map((f) => statSync(join(p, String(f))).mtimeMs))
+  : statSync(p).mtimeMs;
+const built = existsSync(".next/BUILD_ID") ? statSync(".next/BUILD_ID").mtimeMs : 0;
+const stale = Math.max(...["src", "public", "package-lock.json", "next.config.ts", ".env", ".env.local"].map(newest)) > built;
+if (ready && !stale) console.log("Nothing changed since the last build: starting it.");
+if (ready && stale && !npm("run", "build")) process.exit(1);
 const next = join("node_modules", ".bin", win ? "next.cmd" : "next");
 // Listens on this computer only, which is what makes saving keys from the page safe (writeGate checks the rest).
 const args = ready ? ["start", "-H", "127.0.0.1", "-p", port] : ["dev", "--turbopack", "-H", "127.0.0.1", "-p", port];

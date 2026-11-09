@@ -11,12 +11,14 @@ import { countryOf } from "@/lib/countries";
 import { getUser, userTz } from "@/lib/data";
 import { fmtFor, todayIn } from "@/lib/format";
 import { modeOf } from "@/lib/privacy";
+import { updateReady } from "@/lib/updates";
 import { createClient } from "@/utils/supabase/server";
 
 // Accounts made before country support are treated as US (countryOf default) and get a dashboard nudge instead.
 const FIRST_RUN_SINCE = "2026-10-22";
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
+  const update = await updateReady();
   const [{ user }, tz] = await Promise.all([getUser(), userTz()]);
   const profile = user?.user_metadata?.profile;
   // created_at isn't in the token, so only users with no country pay for the full user record.
@@ -47,6 +49,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         </div>
         <Nav />
         <div className="hidden md:block mt-auto px-3 space-y-3">
+          {update && <Link href="/settings#improve" className="block text-sm underline underline-offset-4">A new version of broke is ready</Link>}
           <ThemeToggle />
           <p className="text-[11px] text-muted leading-relaxed">broke is a personal project. Bank data comes from Plaid.</p>
         </div>

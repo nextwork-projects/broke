@@ -49,7 +49,8 @@ export function plaidError(e: unknown): { code: string; message: string } {
  * from live mode (Plaid's sandbox forgets it anyway), so those are only forgotten. Already gone at Plaid counts as done. */
 export async function revokeItem(item: { access_token: string | null; provider: string | null }) {
   const testInLive = item.access_token?.startsWith("access-sandbox-") && process.env.PLAID_ENV !== "sandbox";
-  if (item.provider !== "plaid" || testInLive || !item.access_token) return { ok: true as const };
+  const demo = item.access_token?.startsWith("access-sandbox-demo-"); // the made-up bank: nothing at Plaid
+  if (item.provider !== "plaid" || testInLive || demo || !item.access_token) return { ok: true as const };
   try {
     await plaid.itemRemove({ access_token: item.access_token });
     return { ok: true as const };

@@ -36,13 +36,13 @@ const NAV: { id: Group; label: string; icon: LucideIcon; what: string }[] = [
 ];
 
 // Which settings page each /setup section belongs on. Sections added later land by what they're about.
-const PLACE: Record<string, Group> = { supabase: "database", database: "database", plaid: "banks", akahu: "banks", enablebanking: "banks", basiq: "banks", belvo: "banks", ai: "ai", referrals: "referrals", local: "advanced", mcp: "advanced", devlogin: "advanced" };
+const PLACE: Record<string, Group> = { supabase: "database", database: "database", codes: "database", plaid: "banks", akahu: "banks", enablebanking: "banks", basiq: "banks", belvo: "banks", ai: "ai", referrals: "referrals", local: "advanced", mcp: "advanced", devlogin: "advanced" };
 const groupOf = (s: Section): Group => PLACE[s.id] ?? (/bank/i.test(`${s.title} ${s.what}`) ? "banks" : "advanced");
 // Server setup (keys, database, model, testing shortcuts). Only shown on the machine that runs broke.
 const SERVER: Group[] = ["banks", "database", "referrals", "advanced"];
 const attention = (s: Section) => s.status === "error" || (s.status === "todo" && s.kind !== "more");
 
-export function Settings({ signedIn, local, folder, repo, email, profile, mode, testItems, message, aiMode }: { signedIn: boolean; local: boolean; folder: string; repo: string | null; email: string; profile: Profile; mode: Mode; testItems: { id: string; name: string }[]; message?: string; aiMode: AiMode }) {
+export function Settings({ signedIn, local, folder, repo, update, email, profile, mode, testItems, message, aiMode }: { signedIn: boolean; local: boolean; folder: string; repo: string | null; update: boolean; email: string; profile: Profile; mode: Mode; testItems: { id: string; name: string }[]; message?: string; aiMode: AiMode }) {
   const [group, setGroup] = useState<Group>("profile");
   const [data, setData] = useState<SetupStatus | null>(null);
   const [failed, setFailed] = useState(false);
@@ -124,6 +124,7 @@ export function Settings({ signedIn, local, folder, repo, email, profile, mode, 
             <ThemeToggle />
           </Card>
         )}
+        {group === "improve" && update && <Card title="A new version of broke is ready" what={folder ? "Your changes stay. Stop broke first, then run this in your broke folder, and start broke again." : "Use Get the latest broke below. Your changes stay."}>{folder && <code className="block font-mono text-[13px] rounded-lg border border-line px-3 py-2">npm run update</code>}</Card>}
         {group === "improve" && <ImproveCard folder={folder} repo={repo} />}
         {group === "database" && (
           <Card title="Clear my data" what="Disconnects every bank and deletes your accounts, transactions, bills, budgets, rules, plans and chats. Your sign-in, profile answers and AI connection stay. Only your own data is touched.">

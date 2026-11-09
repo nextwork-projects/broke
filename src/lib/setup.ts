@@ -88,6 +88,8 @@ async function aiRows(): Promise<AiRow[]> {
   return (await providers()).map((p) => ({ id: p.id, label: p.label, ready: p.ready, reason: p.ready ? undefined : p.reason }));
 }
 
+export const SIGN_IN_EMAIL = `<h2>Your broke code</h2><p>Type this code in broke: <strong>{{ .Token }}</strong></p><p>Or <a href="{{ .ConfirmationURL }}">sign in with this link</a>.</p>`;
+
 export async function setupStatus(signedIn: boolean): Promise<SetupStatus> {
   const env = currentEnv();
   const ref = env.NEXT_PUBLIC_SUPABASE_URL?.match(/https:\/\/([a-z0-9]+)\.supabase\.co/)?.[1];
@@ -162,7 +164,23 @@ export async function setupStatus(signedIn: boolean): Promise<SetupStatus> {
   };
 
   const localRow = ai.find((p) => p.id === "local");
+  // Supabase's emails only hold a code when their text asks for one ({{ .Token }}). Both emails: a new person gets
+  // "Confirm signup" the first time, everyone else "Magic link". Without this the email's link still signs them in.
+  const codes: Section = {
+    id: "codes", kind: "more",
+    title: "Sign in with a code",
+    what: "Puts a code in broke's sign-in emails, so you can type it instead of clicking a link. The link keeps working either way.",
+    status: "optional",
+    steps: [
+      ["Open ", { href: dash("/auth/templates"), label: "Authentication → Emails" }, " in Supabase."],
+      ["Open Confirm signup. Set the subject to Your broke code, and replace the message with the text below. Save."],
+      ["Do the same for Magic link."],
+    ],
+    command: SIGN_IN_EMAIL,
+  };
+
   const more: Section[] = [
+    codes,
     {
       id: "local", kind: "more",
       title: "Local model (private, free)",

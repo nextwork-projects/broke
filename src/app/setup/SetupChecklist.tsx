@@ -108,7 +108,7 @@ export function SetupChecklist({ signedIn }: { signedIn: boolean }) {
             ) : (
               data && <Link href="/" className="btn-primary">Open broke</Link>
             )}
-            {canSkipBank && <Link href="/" className="btn">Skip banks for now</Link>}
+            {canSkipBank && <Link href="/" className="btn">Skip: use made-up data</Link>}
             <button className="text-sm text-muted hover:text-ink inline-flex items-center gap-1.5" disabled={checking} onClick={() => load()}>
               <RefreshCw size={14} className={checking ? "animate-spin" : ""} /> {checking ? "Checking" : "Check again"}
             </button>
@@ -127,7 +127,7 @@ export function SetupChecklist({ signedIn }: { signedIn: boolean }) {
             <button className="w-full flex items-center gap-4 px-6 py-4 text-left row-hover" aria-expanded={moreOpen} onClick={() => setMoreOpen(!moreOpen)}>
               <span className="flex-1 min-w-0">
                 <span className="block font-medium">More options</span>
-                <span className="block text-sm text-muted truncate">Local AI model, Claude Code, skip sign-in while testing</span>
+                <span className="block text-sm text-muted truncate">Sign-in codes, local AI model, Claude Code</span>
               </span>
               <ChevronDown size={18} className={`text-muted shrink-0 transition-transform duration-300 ${moreOpen ? "rotate-180" : ""}`} />
             </button>

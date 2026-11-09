@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { Welcome } from "@/components/CountryPicker";
 import { GoalPicker, type DraftPlan } from "@/components/GoalPicker";
+import { DemoBankButton } from "@/components/DemoBank";
 import { FeedConnect } from "@/components/FeedConnect";
 import { Logo } from "@/components/Logo";
 import { linkedText, useAkahu, useLinkBank } from "@/components/PlaidButtons";
@@ -83,6 +84,7 @@ function BankStep({ choices, country, info, next, reload }: { choices: AddChoice
             {choices.bank === "plaid" && <button onClick={() => link.start()} className={linked ? "btn" : "btn-primary"}>{linked ? "Link another bank" : "Link a bank or card"}</button>}
             {choices.bank === "akahu" && <button onClick={akahu.start} className={linked ? "btn" : "btn-primary"}>Link your NZ banks</button>}
             {choices.sandbox && <button onClick={() => link.start(true)} className="btn">Use a test bank</button>}
+            {choices.demo && !linked && <DemoBankButton primary={!choices.bank} onDone={reload} />}
             {linked > 0 && <button onClick={next} className="btn-primary">Continue</button>}
           </div>
           {(link.error || akahu.error) && <p className="text-sm text-bad">{link.error || akahu.error}</p>}

@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowLeftRight, ChartPie, Ellipsis, House, Landmark, MessageCircle, Monitor, Moon, Sun } from "lucide-react";
+import { ArrowLeftRight, ChartPie, ClipboardList, Ellipsis, House, Landmark, MessageCircle, Monitor, Moon, Sun } from "lucide-react";
 import Link from "next/link";
 import type { ComponentType } from "react";
 import { usePathname, useRouter } from "next/navigation";
@@ -9,12 +9,13 @@ import { useAssistant } from "@/components/Assistant";
 import { BookmarkButton, SavedList } from "@/components/Bookmarks";
 import { DonateLink, DonatePrompt } from "@/components/Donate";
 
-// Home is the three steps. Spending holds Budgets and Recurring as tabs, More holds the rest; every page keeps its own URL.
+// Spending holds Budgets and Recurring as tabs, Plan holds Optimize, Bonuses and Cards, More holds the rest. Every page keeps its own URL.
 type Icon = ComponentType<{ size?: number; strokeWidth?: number }>;
 const LINKS: { href: string; label: string; icon: Icon }[] = [
   { href: "/", label: "Home", icon: House },
   { href: "/spending", label: "Spending", icon: ChartPie },
   { href: "/transactions", label: "Activity", icon: ArrowLeftRight },
+  { href: "/plan", label: "Plan", icon: ClipboardList },
   { href: "/accounts", label: "Accounts", icon: Landmark },
   { href: "/more", label: "More", icon: Ellipsis },
 ];
@@ -22,7 +23,7 @@ const SPENDING = [{ href: "/spending", label: "Overview" }, { href: "/budgets", 
 const PLAN = [{ href: "/plan", label: "Money plan" }, { href: "/optimize", label: "Optimize" }, { href: "/bonuses", label: "Bonuses" }, { href: "/cards", label: "Cards" }];
 const under = (path: string, href: string) => (href === "/" ? path === "/" : path === href || path.startsWith(href + "/"));
 const tabsOf = (path: string) => [SPENDING, PLAN].find((g) => g.some((t) => under(path, t.href)));
-const sectionOf = (path: string) => (SPENDING.some((t) => under(path, t.href)) ? "/spending" : LINKS.find((l) => under(path, l.href))?.href ?? (tabsOf(path) || under(path, "/connect-ai") || under(path, "/debt") ? "/more" : undefined));
+const sectionOf = (path: string) => (SPENDING.some((t) => under(path, t.href)) ? "/spending" : PLAN.some((t) => under(path, t.href)) ? "/plan" : LINKS.find((l) => under(path, l.href))?.href ?? (under(path, "/connect-ai") || under(path, "/debt") ? "/more" : undefined));
 
 const TITLES: Record<string, string> = {
   "/": "Home", "/transactions": "Activity", "/spending": "Spending", "/budgets": "Budgets", "/recurring": "Recurring", "/plan": "Money plan",
@@ -89,7 +90,7 @@ function PhoneBar({ section }: { section?: string }) {
   const assistant = useAssistant();
   const cell = "flex flex-col items-center gap-0.5 text-[11px] py-1.5 rounded-xl";
   return (
-    <nav aria-label="Main" className="fixed bottom-0 inset-x-0 z-30 md:hidden bg-surface border-t border-line grid grid-cols-6 px-1 pt-1 pb-[max(6px,env(safe-area-inset-bottom))]">
+    <nav aria-label="Main" className="fixed bottom-0 inset-x-0 z-30 md:hidden bg-surface border-t border-line grid grid-cols-7 px-1 pt-1 pb-[max(6px,env(safe-area-inset-bottom))]">
       {LINKS.map(({ href, label, icon: Icon }) => (
         <Link key={href} href={href} prefetch aria-current={href === section ? "page" : undefined} className={`${cell} ${href === section ? "text-ink font-medium" : "text-muted"}`}>
           <Icon size={21} strokeWidth={href === section ? 2 : 1.6} />

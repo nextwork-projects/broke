@@ -4,9 +4,13 @@ import { useEffect, useState } from "react";
 import { Logo } from "@/components/Logo";
 import { createClient } from "@/utils/supabase/client";
 
+// Sign in with a code from your email. The same email also has a link, which still works (/auth/callback).
+// Rate limits and wrong-browser links were the common trouble with links alone; a code works in any tab.
 export default function LoginPage() {
   const [email, setEmail] = useState("");
-  const [state, setState] = useState<"idle" | "sending" | "sent" | "error">("idle");
+  const [code, setCode] = useState("");
+  const [state, setState] = useState<"idle" | "sending" | "sent" | "checking" | "error">("idle");
+  const [sent, setSent] = useState(false);
   const [message, setMessage] = useState("");
   const [firstRun, setFirstRun] = useState<string | null>(null);
   const [devLogin, setDevLogin] = useState(false);
@@ -21,8 +25,8 @@ export default function LoginPage() {
     }).catch(() => {});
   }, []);
 
-  async function submit(e: React.FormEvent) {
-    e.preventDefault();
+  async function send(e?: React.FormEvent) {
+    e?.preventDefault();
     setState("sending");
     const { error } = await createClient().auth.signInWithOtp({
       email,
@@ -30,8 +34,23 @@ export default function LoginPage() {
     });
     if (error) {
       setState("error");
-      setMessage(error.message);
-    } else setState("sent");
+      setMessage(/rate limit|too many/i.test(error.message) ? "Too many sign-in emails for now. Supabase's free email sends a few an hour. Wait a bit, or use the code or link from the last email." : error.message);
+    } else {
+      setSent(true);
+      setCode("");
+      setState("sent");
+    }
+  }
+
+  async function verify(e: React.FormEvent) {
+    e.preventDefault();
+    setState("checking");
+    const { error } = await createClient().auth.verifyOtp({ email, token: code.replace(/\s/g, ""), type: "email" });
+    if (error) {
+      setState("error");
+      setCode(""); // ready for the right one, not mixed in with the wrong one
+      setMessage(/expired|invalid/i.test(error.message) ? "That code didn't work. Codes work once, for about an hour. Check you typed the newest one, or send a new one." : error.message);
+    } else window.location.assign("/"); // a full load: the page cache may still hold "/" from before sign-in (a redirect back here)
   }
 
   return (
@@ -47,13 +66,34 @@ export default function LoginPage() {
           </ol>
         </section>
       )}
-      <form onSubmit={submit} className="card p-8 space-y-5">
+      <form onSubmit={sent ? verify : send} className="card p-8 space-y-5">
         <div>
           <Logo />
-          <p className="text-sm text-muted mt-1">Sign in with a link sent to your email.</p>
+          <p className="text-sm text-muted mt-1">{sent ? `We sent a code to ${email}.` : "Sign in with a code sent to your email."}</p>
         </div>
-        {state === "sent" ? (
-          <p className="text-sm">Check {email} for the sign-in link.</p>
+        {sent ? (
+          <>
+            <input
+              inputMode="numeric"
+              autoComplete="one-time-code"
+              required
+              autoFocus
+              value={code}
+              onChange={(e) => setCode(e.target.value.replace(/[^\d\s]/g, ""))}
+              placeholder="Code from the email"
+              aria-label="Code from the email"
+              className="input w-full tabular tracking-[0.2em] text-center text-lg"
+            />
+            <button disabled={state === "checking" || code.replace(/\s/g, "").length < 6} className="btn-primary w-full">
+              {state === "checking" ? "Checking..." : "Sign in"}
+            </button>
+            {state === "error" && <p className="text-sm text-red-600">{message}</p>}
+            <p className="text-xs text-muted">No code in the email? Click its sign-in link instead, in this browser.</p>
+            <div className="flex justify-between text-sm">
+              <button type="button" onClick={() => send()} disabled={state === "sending"} className="text-muted underline underline-offset-4">{state === "sending" ? "Sending..." : "Send a new code"}</button>
+              <button type="button" onClick={() => { setSent(false); setState("idle"); }} className="text-muted underline underline-offset-4">Use another email</button>
+            </div>
+          </>
         ) : (
           <>
             <input
@@ -66,7 +106,7 @@ export default function LoginPage() {
               className="input w-full"
             />
             <button disabled={state === "sending"} className="btn-primary w-full">
-              {state === "sending" ? "Sending..." : "Send link"}
+              {state === "sending" ? "Sending..." : "Send code"}
             </button>
             {state === "error" && <p className="text-sm text-red-600">{message}</p>}
             {devLogin && (

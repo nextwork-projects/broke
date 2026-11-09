@@ -183,7 +183,7 @@ export function MoneyPlan({ initial, today, name }: { initial: PlanState; today:
         {state.error && <p className="text-sm text-bad" role="alert">{state.error}</p>}
         {state.stale && !state.running && <p className="text-sm text-bad">{state.stale} Redo it to use your current accounts.</p>}
         {!state.ready && <p className="text-sm text-muted">The money plan needs a database update. Open Setup to apply it.</p>}
-        {p?.note && !state.running && <p className="text-sm text-muted">{p.note} Steps built on those numbers aren&apos;t counted.</p>}
+        {p?.note && !state.running && <p className="text-sm text-muted">{p.note} Steps built on those numbers aren&apos;t counted. <a href="/accounts" className="underline underline-offset-2">See how far back each bank goes</a>.</p>}
       </div>
 
       {p && live.length > 0 && (

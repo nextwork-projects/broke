@@ -6,13 +6,16 @@ import { CountryBanner } from "@/components/CountryPicker";
 import { EmptyBank } from "@/components/EmptyBank";
 import { GoLiveCard } from "@/components/GoLiveCard";
 import { Merchant } from "@/components/Merchant";
+import { PayFound } from "@/components/PayFound";
 import { PayQuestion } from "@/components/PayQuestion";
 import { SyncButton } from "@/components/PlaidButtons";
 import { TxnList } from "@/components/TxnList";
+import { WeekCard } from "@/components/WeekCard";
 import { categories, getUser, moneyByMonth, today, TXN_SELECT, withAccountNames, type Txn } from "@/lib/data";
 import { dateLabel, money0, monthStart, ymd } from "@/lib/format";
 import { deterministicMoves, ladder } from "@/lib/plan";
 import { myPlanFacts } from "@/lib/plan-facts";
+import { payGuess } from "@/lib/pay";
 import { moneyPicture } from "@/lib/steps";
 import { fetchChecks } from "@/lib/unsure";
 
@@ -20,6 +23,23 @@ import { fetchChecks } from "@/lib/unsure";
 async function HomeCheck({ checks }: { checks: Promise<Checks> }) {
   const c = await checks;
   return c.total > 0 ? <CategoryCheck initial={c} closed /> : null;
+}
+
+// Pay the bank filed as something else (lib/pay.ts). Streams in beside the rest.
+async function PayCheck({ uid, today, notPay }: { uid: string; today: string; notPay: string[] }) {
+  const { supabase } = await getUser();
+  const since = ymd(new Date(Date.parse(today) - 90 * 864e5));
+  const { data } = await supabase.from("transactions").select("date, amount, name, merchant_name, custom_name, category:categories(id, key, label, kind)")
+    .eq("user_id", uid).eq("ignored", false).lt("amount", -200).gte("date", since).limit(500);
+  type R = { date: string; amount: number; name: string; merchant_name: string | null; custom_name: string | null; category: { key: string; label: string; kind: string } | null };
+  const rows = (data ?? []) as unknown as R[];
+  const name = (r: R) => r.merchant_name ?? r.name;
+  const pay = payGuess(rows.map((r) => ({ name: name(r), date: r.date, amount: Number(r.amount), kind: r.category?.kind ?? null })), notPay);
+  if (!pay) return null;
+  const { data: income } = await supabase.from("categories").select("id").eq("key", "INCOME").is("user_id", null).maybeSingle();
+  if (!income) return null;
+  const filedAs = rows.find((r) => name(r) === pay.name)?.category?.label ?? "something else";
+  return <PayFound pay={pay} filedAs={filedAs} incomeId={income.id as string} notPay={notPay} />;
 }
 
 // One line pointing at the plan, or the one question broke needs answered. Streams in: the plan facts are the slow part.
@@ -91,8 +111,10 @@ export default async function Dashboard() {
         ))}
       </section>
 
+      <Suspense fallback={null}><PayCheck uid={uid} today={day} notPay={(user?.user_metadata?.not_pay as string[] | undefined) ?? []} /></Suspense>
       <Suspense fallback={null}><NextStep profile={profile ?? {}} /></Suspense>
       <Suspense fallback={null}><HomeCheck checks={checks} /></Suspense>
+      <WeekCard />
 
       <div className="grid grid-cols-1 gap-4 @3xl:grid-cols-2 items-start">
         <section className="card p-5 space-y-3">

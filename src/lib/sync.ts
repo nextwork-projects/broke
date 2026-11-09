@@ -13,7 +13,9 @@ type PlaidItem = Item & { access_token: string };
 export const ITEM_COLS = "id, user_id, access_token, cursor, provider";
 
 // One connection, whichever service it comes through. Each writes the same accounts and transactions tables.
-export const syncItem = (item: Item) => (item.provider === "akahu" ? syncAkahu(item) : isFeed(item.provider) ? syncFeed(item, item.provider) : syncPlaid(item as PlaidItem));
+// The made-up bank (api/demo-bank) has nothing to fetch.
+export const DEMO_TOKEN = "access-sandbox-demo-";
+export const syncItem = (item: Item) => item.access_token?.startsWith(DEMO_TOKEN) ? Promise.resolve({ added: 0, modified: 0, removed: 0 }) : (item.provider === "akahu" ? syncAkahu(item) : isFeed(item.provider) ? syncFeed(item, item.provider) : syncPlaid(item as PlaidItem));
 
 // Pulls accounts, transactions (cursor-based), recurring streams and investment holdings for one Plaid item.
 async function syncPlaid(item: PlaidItem) {

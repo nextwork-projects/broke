@@ -36,6 +36,8 @@ export function addChoices(country?: string | null, alsoNz = false) {
     feeds: options.filter((p): p is FeedId => isFeed(p)),
     investments: plaid && code === "US",
     sandbox: plaid && process.env.PLAID_ENV === "sandbox",
+    // No Plaid keys at all: a made-up bank instead (api/demo-bank), so broke can be tried with only a database.
+    demo: !configured("plaid"),
     // NZ without Akahu keys: say where to add them.
     akahuMissing: (countryOf(code).providers.includes("akahu") || alsoNz) && !configured("akahu"),
     // Lives elsewhere but also banks in NZ (Settings, money profile): the NZ option beside their own.
