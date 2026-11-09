@@ -175,6 +175,16 @@ async function callFit(client: Client, name: string, pool: Record<string, unknow
 
 /** Makes a free project called "broke" in the first organization, and waits until it's ready (a minute or two). */
 export async function createProject(region = "us-east-1") {
+  try {
+    return await makeProject(region);
+  } catch (e) {
+    // Supabase allows each person 2 active free projects, counted across all their organizations.
+    if (/maximum limits?|project limit/i.test(e instanceof Error ? e.message : "")) throw new Error("Your Supabase account already has 2 free projects, Supabase's limit. Pause or delete one at supabase.com, then try again. Or connect again and pick the organization that has a project to use.");
+    throw e;
+  }
+}
+
+async function makeProject(region: string) {
   const s = load();
   const client = await connectClient(s);
   try {
@@ -193,7 +203,7 @@ export async function createProject(region = "us-east-1") {
     } catch (e) {
       if (!/confirm/i.test(e instanceof Error ? e.message : "")) throw e;
       const confirm = await callFit(client, "confirm_cost", { ...pool, amount });
-      pool.confirm_cost_id = (() => { try { const c = JSON.parse(confirm) as { confirm_cost_id?: string; id?: string }; return c.confirm_cost_id ?? c.id; } catch { return confirm.match(/[A-Za-z0-9_-]{16,}/)?.[0] ?? confirm.trim(); } })();
+      pool.confirm_cost_id = (() => { try { const c = JSON.parse(confirm) as { confirmation_id?: string; confirm_cost_id?: string; id?: string }; return c.confirmation_id ?? c.confirm_cost_id ?? c.id; } catch { return confirm.match(/[A-Za-z0-9_-]{16,}/)?.[0] ?? confirm.trim(); } })();
       made = one(await callFit(client, "create_project", pool));
     }
     for (let i = 0; i < 60; i++) {

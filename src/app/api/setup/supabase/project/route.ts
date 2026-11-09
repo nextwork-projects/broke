@@ -27,6 +27,6 @@ export async function POST(request: Request) {
     return NextResponse.json(await fillFrom(id));
   } catch (e) {
     console.error("[broke] supabase project:", e instanceof Error ? e.message : e);
-    return NextResponse.json({ error: e instanceof Error && /cost money|organization/.test(e.message) ? e.message : "Supabase didn't answer. Try again in a moment." }, { status: 502 });
+    return NextResponse.json({ error: e instanceof Error && /cost money|organization|free projects/.test(e.message) ? e.message : "Supabase didn't answer. Try again in a moment." }, { status: 502 });
   }
 }
