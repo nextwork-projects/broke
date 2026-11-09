@@ -23,7 +23,7 @@ export type BudgetCat = { id: string; label: string; icon: string; color: string
 // Bars use the app's chart blue, like the rest of the app; only an overspend turns red.
 const TEXT = { ok: "text-muted", near: "text-ink", over: "text-bad" };
 
-export function BudgetEditor({ cats: all, initial, year, range, today, income, now, tableMissing, aside }: { cats: BudgetCat[]; initial: Record<string, number>; year: MonthSpend[]; range: BudgetRange | null; today: string; income: number; now: string; tableMissing: boolean; aside?: React.ReactNode }) {
+export function BudgetEditor({ basis, cats: all, initial, year, range, today, income, now, tableMissing, aside }: { basis: string; cats: BudgetCat[]; initial: Record<string, number>; year: MonthSpend[]; range: BudgetRange | null; today: string; income: number; now: string; tableMissing: boolean; aside?: React.ReactNode }) {
   const { money0, dateLabel } = useMoney();
   const root = useRef<HTMLDivElement>(null);
   const [budgets, setBudgets] = useState(initial);
@@ -122,7 +122,7 @@ export function BudgetEditor({ cats: all, initial, year, range, today, income, n
         <NewCategory taken={cats.map((c) => c.label)} onDone={(id, label, amount) => { setSheet(null); setBudgets((x) => ({ ...x, [id]: amount })); setFresh(id); toast(`Added ${label}`); }} />
       </Sheet>
       <Sheet open={sheet === "suggest"} onClose={() => setSheet(null)} title="Suggested budgets">
-        <Suggest cats={suggestion} income={0} onUse={useSuggested} disabled={error === SETUP} sticky />
+        <Suggest cats={suggestion} income={0} basis={basis} onUse={useSuggested} disabled={error === SETUP} sticky />
       </Sheet>
     </>
   );
@@ -133,9 +133,9 @@ export function BudgetEditor({ cats: all, initial, year, range, today, income, n
       <div className="card overflow-hidden">
         <div className="p-6 md:p-8 pb-4 md:pb-4 max-w-xl space-y-2">
           <h2 className="text-2xl font-semibold">Set a budget from how you really spend</h2>
-          <p className="text-sm text-muted">These are your averages for the last 3 months, rounded up, and never less than you&apos;ve spent this month. Use them as they are, or add one category at a time.</p>
+          <p className="text-sm text-muted">{basis} Use them as they are, or change any one after.</p>
         </div>
-        <Suggest cats={suggestion} income={income} onUse={useSuggested} disabled={error === SETUP} alt={<button className="btn" onClick={() => setSheet("add")}>Add one at a time</button>} />
+        <Suggest cats={suggestion} income={income} basis={basis} onUse={useSuggested} disabled={error === SETUP} alt={<button className="btn" onClick={() => setSheet("add")}>Add one at a time</button>} />
         {error && <div className="px-6 md:px-8 pb-6"><ErrorNote error={error} /></div>}
         {sheets}
       </div>
@@ -547,8 +547,8 @@ function Editor({ label, value, onSave, onCancel, onDelete }: { label: string; v
   );
 }
 
-// Preview of budgets from the 3-month average.
-function Suggest({ cats, income, onUse, disabled, alt, sticky }: { cats: BudgetCat[]; income: number; onUse: () => void; disabled: boolean; alt?: React.ReactNode; sticky?: boolean }) {
+// Preview of the suggested budgets: the usual month per category.
+function Suggest({ cats, income, basis, onUse, disabled, alt, sticky }: { cats: BudgetCat[]; income: number; basis: string; onUse: () => void; disabled: boolean; alt?: React.ReactNode; sticky?: boolean }) {
   const { money0 } = useMoney();
   const total = cats.reduce((s, c) => s + c.suggested, 0);
   if (!cats.length) return <div className="px-6 md:px-8 pb-6 space-y-4"><p className="text-sm text-muted">Nothing to suggest right now.</p>{alt}</div>;
@@ -566,7 +566,7 @@ function Suggest({ cats, income, onUse, disabled, alt, sticky }: { cats: BudgetC
         ))}
       </ul>
       <div className={`${sticky ? "sticky bottom-0" : ""} bg-surface px-5 md:px-8 py-5 space-y-3`}>
-        <p className="text-xs text-muted">Each one is your 3-month average, rounded up, and never less than you&apos;ve spent this month.</p>
+        <p className="text-xs text-muted">{basis} Never less than you&apos;ve already spent this month.</p>
         {income > 0 && <p className="text-sm text-muted">You bring in about {money0(income)} a month. {income >= total ? `This leaves ${money0(income - total)} to save.` : `You're spending ${money0(total - income)} more than you earn.`}</p>}
         <div className="flex flex-wrap items-center gap-3">
           <button className="btn-primary" onClick={onUse} disabled={disabled}>Use these · {money0(total)}/mo</button>

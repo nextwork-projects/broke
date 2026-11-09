@@ -6,6 +6,19 @@ export const step = (n: number) => (n < 200 ? 10 : n < 1000 ? 25 : 50);
 // A suggested budget: the average rounded up to the next step.
 export const roundUp = (n: number) => (n > 0 ? Math.ceil(n / step(n)) * step(n) : 0);
 
+// The middle value: one unusual month (a holiday, a big repair) doesn't set the budget. Averages the middle two when even.
+export function median(ns: number[]) {
+  if (!ns.length) return 0;
+  const s = [...ns].sort((a, b) => a - b), mid = Math.floor(s.length / 2);
+  return s.length % 2 ? s[mid] : (s[mid - 1] + s[mid]) / 2;
+}
+
+// "August, September and October" from ["2026-10", "2026-08", "2026-09"].
+export function monthList(months: string[]) {
+  const names = [...months].sort().map((m) => new Date(`${m}-01T00:00:00Z`).toLocaleDateString("en-US", { month: "long", timeZone: "UTC" }));
+  return names.length <= 1 ? names.join("") : `${names.slice(0, -1).join(", ")} and ${names.at(-1)}`;
+}
+
 // A suggested budget for a category: the 3-month average, but never below what is already spent this month, rounded up.
 // "Use these" never puts the user over budget on day one.
 export const suggest = (avg: number, spentThisMonth: number) => roundUp(Math.max(avg, spentThisMonth));

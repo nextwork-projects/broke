@@ -2,12 +2,12 @@ import { SlidersHorizontal } from "lucide-react";
 import { AskButton } from "@/components/Assistant";
 import { BudgetEditor, type BudgetCat } from "@/components/BudgetEditor";
 import { EmptyBank } from "@/components/EmptyBank";
-import { budgetContext, suggest, type MonthSpend } from "@/lib/budget";
+import { budgetContext, median, monthList, suggest, type MonthSpend } from "@/lib/budget";
 import { categories, getUser, isSpend, moneyByMonth, sumOf, today, transactionsSince, typicalMonthly } from "@/lib/data";
 import { monthStart, ymd } from "@/lib/format";
 
-// Budgets: tracked against this month with a pace marker; suggestions come from the last 3 full months,
-// never below this month's spending so far. Income is the typical month every page shows (typicalMonthly).
+// Budgets: tracked against this month with a pace marker. Suggestions come from the full months of data (up to 3, the
+// ones the typical month uses), the middle value per category, never below this month's spending so far. Income is the typical month every page shows (typicalMonthly).
 const DAY = /^\d{4}-\d{2}-\d{2}$/;
 const nextDay = (d: string) => new Date(Date.parse(`${d}T00:00:00Z`) + 864e5).toISOString().slice(0, 10);
 
@@ -31,11 +31,15 @@ export default async function Budgets({ searchParams }: { searchParams: Promise<
   const sum = (catId: string, month?: string) =>
     sumOf((month ? txns : past).filter((r) => r.category_id === catId && (!month || r.month.startsWith(month))), (r) => r.spend);
   const income = typical?.income ?? 0;
+  const clean = typical?.list ?? [];
+  const basis = clean.length ? `Built from ${monthList(clean)}, your full months of data: what you usually spend in each category, rounded up.` : "Built from the spending broke has so far, rounded up. It gets sharper after your first full month.";
 
   const rows: BudgetCat[] = cats
     .filter((c) => c.kind === "spend")
     .map((c) => {
-      const avg = sum(c.id) / monthsOfData;
+      // The full months broke has (the ones the typical month uses), middle value per category. Without one full month yet,
+      // the average of what there is.
+      const avg = clean.length ? median(clean.map((m) => sum(c.id, m))) : sum(c.id) / monthsOfData;
       const spent = sum(c.id, thisMonth);
       return { id: c.id, label: c.label, icon: c.icon, color: c.color, spent, last: sum(c.id, lastMonth), avg, suggested: suggest(avg, spent), main: c.key !== "BANK_FEES" && Math.max(avg, spent) >= 10 };
     });
@@ -61,7 +65,7 @@ export default async function Budgets({ searchParams }: { searchParams: Promise<
 
   return (
     // The key takes in saved changes from elsewhere (the AI's Apply) on refresh.
-    <BudgetEditor key={JSON.stringify(budgets) + (range ? `${from}|${to}` : "")} cats={rows} initial={budgets} year={yearMonths} range={range} today={ymd(now)} income={Math.round(income)} now={now.toISOString()} tableMissing={!!saved.error} aside={
+    <BudgetEditor key={JSON.stringify(budgets) + (range ? `${from}|${to}` : "")} basis={basis} cats={rows} initial={budgets} year={yearMonths} range={range} today={ymd(now)} income={Math.round(income)} now={now.toISOString()} tableMissing={!!saved.error} aside={
       <AskButton
         q={`Look at my budget, my income and my last 3 months of spending. Which categories should I lower, by how much, and what would that free up each month?${budgetContext(rows.filter((c) => c.id in budgets).map((c) => [c.label, budgets[c.id]]))}`}
         className="card-link w-full p-5 text-left flex items-center gap-4"

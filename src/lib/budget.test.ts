@@ -60,3 +60,11 @@ console.log("budget: ok");
   ]);
   assert.deepEqual(budgetChanges({ Coffee: null }, cats, {}), []); // nothing to remove
 }
+
+// The usual month: one big month doesn't set the budget.
+import { median as med, monthList as ml } from "./budget.ts";
+assert.equal(med([120, 900, 140]), 140);
+assert.equal(med([100, 200]), 150);
+assert.equal(med([]), 0);
+assert.equal(ml(["2026-10", "2026-08", "2026-09"]), "August, September and October");
+assert.equal(ml(["2026-10"]), "October");

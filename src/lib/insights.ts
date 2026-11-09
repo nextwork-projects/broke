@@ -39,7 +39,7 @@ export function typicalMonth(rows: { month: string; income: number; spend: numbe
   const of = (months: string[], f: (r: (typeof rows)[number]) => number) => sum(rows.filter((r) => months.includes(r.month.slice(0, 7))).map(f));
   const paid = (ym: string) => of([ym], (r) => r.income) >= 100;
   const full = [1, 2, 3].map((k) => new Date(Date.UTC(y, m - 1 - k, 1)).toISOString().slice(0, 7)).filter((ym) => `${ym}-01` >= oldest && paid(ym));
-  if (full.length) return { income: of(full, (r) => r.income) / full.length, spend: of(full, (r) => r.spend) / full.length, months: full.length };
+  if (full.length) return { income: of(full, (r) => r.income) / full.length, spend: of(full, (r) => r.spend) / full.length, months: full.length, list: full };
   const seen = [...new Set(rows.map((r) => r.month.slice(0, 7)))].sort();
   const first = seen.find(paid);
   if (!first) return null;
@@ -48,7 +48,7 @@ export function typicalMonth(rows: { month: string; income: number; spend: numbe
   if (days < 14) return null;
   const since = seen.filter((ym) => ym >= start.slice(0, 7));
   const scale = 365 / 12 / days;
-  return { income: of(since, (r) => r.income) * scale, spend: of(since, (r) => r.spend) * scale, months: 0 };
+  return { income: of(since, (r) => r.income) * scale, spend: of(since, (r) => r.spend) * scale, months: 0, list: [] as string[] };
 }
 
 // The take-home pay typed in onboarding (profile.pay), as a month. Used only when no paycheck is found, never added to one.

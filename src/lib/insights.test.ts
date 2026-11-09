@@ -86,7 +86,7 @@ const rows = [
   { month: "2026-09-01", income: 3240, spend: 1800 },
   { month: "2026-10-01", income: 3240, spend: 7000 },
 ];
-assert.deepEqual(typicalMonth(rows, "2026-10-23", "2026-07-30"), { income: 3240, spend: 1000, months: 2 });
+assert.deepEqual(typicalMonth(rows, "2026-10-23", "2026-07-30"), { income: 3240, spend: 1000, months: 2, list: ["2026-09", "2026-08"] }, "the partial July is left out");
 assert.equal(typicalMonth(rows, "2026-10-23", "2026-06-01")!.income, (810 + 3240 + 3240) / 3, "3 full months");
 // The e2e user: history from Jul 30 but only cents of interest until October's paychecks. Not $0.12 a month:
 // October so far (2,835.92 over 23 days) scaled to a month.
