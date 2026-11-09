@@ -182,9 +182,17 @@ export function ConnectSupabaseButton({ onDone, onFail }: { onDone: () => void; 
         onClick={async () => {
           setBusy(true);
           setMsg("");
+          // Supabase opens in its own tab, so broke stays put. Opened now, while the click still counts, or it's blocked.
+          const tab = window.open("", "_blank");
           const res = await fetch("/api/setup/supabase/connect", { method: "POST" });
           const body = await res.json().catch(() => ({}));
-          if (body.url) return void (window.location.href = body.url);
+          if (body.url) {
+            if (tab) tab.location.href = body.url;
+            else window.location.href = body.url; // pop-ups blocked: this tab, as before
+            setMsg("Approve broke in the Supabase tab. This page updates when you're done.");
+            return;
+          }
+          tab?.close();
           setBusy(false);
           if (!res.ok) {
             setMsg(body.error ?? "Couldn't start the Supabase sign-in.");

@@ -132,14 +132,18 @@ export const accountConnected = () => {
 };
 
 export type Project = { id: string; name: string; region?: string; status?: string };
+// Supabase's list tools wrap the list: {"projects": [...]}, {"organizations": [...]}. A bare list works too.
+const listOf = <T,>(text: string, key: string): T[] => {
+  const raw = JSON.parse(text) as T[] | Record<string, T[]>;
+  return Array.isArray(raw) ? raw : raw[key] ?? [];
+};
 
 /** The projects this Supabase account can see. */
 export async function listProjects(): Promise<Project[]> {
   const s = load();
   const client = await connectClient(s);
   try {
-    const raw = JSON.parse(unwrap(await call(client, "list_projects", {}))) as Project[] | { projects?: Project[] };
-    return (Array.isArray(raw) ? raw : raw.projects ?? []).map((p) => ({ id: p.id, name: p.name, region: p.region, status: p.status }));
+    return listOf<Project>(unwrap(await call(client, "list_projects", {})), "projects").map((p) => ({ id: p.id, name: p.name, region: p.region, status: p.status }));
   } finally {
     await client.close().catch(() => {});
   }
@@ -174,19 +178,26 @@ export async function createProject(region = "us-east-1") {
   const s = load();
   const client = await connectClient(s);
   try {
-    const orgs = JSON.parse(unwrap(await call(client, "list_organizations", {}))) as { id: string }[];
+    const orgs = listOf<{ id: string }>(unwrap(await call(client, "list_organizations", {})), "organizations");
     if (!orgs.length) throw new Error("This Supabase account has no organization yet. Open supabase.com once to make one.");
     const pool: Record<string, unknown> = { type: "project", organization_id: orgs[0].id, name: "broke", region, recurrence: "monthly" };
     // Supabase asks to confirm the cost first. A free organization's project costs $0; anything else is the user's call.
     const cost = await callFit(client, "get_cost", pool);
     const amount = Number(cost.match(/"amount"\s*:\s*([\d.]+)/)?.[1] ?? cost.match(/\$\s*([\d.]+)/)?.[1] ?? 0);
     if (amount > 0) throw new Error("A new project would cost money on this account. Make one yourself at supabase.com instead.");
-    pool.amount = amount;
-    const confirm = await callFit(client, "confirm_cost", pool);
-    pool.confirm_cost_id = (() => { try { return (JSON.parse(confirm) as { confirm_cost_id?: string; id?: string }).confirm_cost_id ?? JSON.parse(confirm).id; } catch { return confirm.match(/[A-Za-z0-9_-]{16,}/)?.[0] ?? confirm.trim(); } })();
-    const made = JSON.parse(await callFit(client, "create_project", pool)) as Project;
+    // Free: Supabase's create_project says to call it without a cost confirmation unless it asks for one.
+    const one = (t: string) => { const r = JSON.parse(t) as Project & { project?: Project }; return r.project ?? r; };
+    let made: Project;
+    try {
+      made = one(await callFit(client, "create_project", pool));
+    } catch (e) {
+      if (!/confirm/i.test(e instanceof Error ? e.message : "")) throw e;
+      const confirm = await callFit(client, "confirm_cost", { ...pool, amount });
+      pool.confirm_cost_id = (() => { try { const c = JSON.parse(confirm) as { confirm_cost_id?: string; id?: string }; return c.confirm_cost_id ?? c.id; } catch { return confirm.match(/[A-Za-z0-9_-]{16,}/)?.[0] ?? confirm.trim(); } })();
+      made = one(await callFit(client, "create_project", pool));
+    }
     for (let i = 0; i < 60; i++) {
-      const p = JSON.parse(await callFit(client, "get_project", { id: made.id, project_id: made.id })) as Project;
+      const p = one(await callFit(client, "get_project", { id: made.id, project_id: made.id }));
       if (p.status === "ACTIVE_HEALTHY") return made.id;
       await new Promise((r) => setTimeout(r, 5000));
     }

@@ -15,7 +15,8 @@ if (Number(process.versions.node.split(".")[0]) < 20) {
 
 const win = process.platform === "win32";
 const npm = (...args) => spawnSync("npm", args, { stdio: "inherit", shell: win }).status === 0;
-if (!existsSync("node_modules") && !npm("install")) process.exit(1);
+// npm ci installs exactly what the repo pins and leaves package-lock.json as it is (so `npm run update` stays clean).
+if (!existsSync("node_modules") && !npm("ci") && !npm("install")) process.exit(1);
 
 const env = {};
 for (const f of [".env", ".env.local"]) {

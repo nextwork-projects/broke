@@ -61,6 +61,20 @@ export function SetupChecklist({ signedIn }: { signedIn: boolean }) {
     }
     setChecking(false);
   }, []);
+  // Connect Supabase opens Supabase in its own tab. Back from Supabase, that tab passes the result here and closes itself.
+  useEffect(() => {
+    const db = new URLSearchParams(window.location.search).get("db");
+    if (db && window.opener) {
+      try { localStorage.setItem("broke.supabase", `${db}|${Date.now()}`); } catch { /* private window: this tab just stays open */ }
+      window.close();
+      return;
+    }
+    const onStorage = (e: StorageEvent) => {
+      if (e.key === "broke.supabase" && e.newValue) window.location.href = `/setup?db=${encodeURIComponent(e.newValue.split("|")[0])}`;
+    };
+    addEventListener("storage", onStorage);
+    return () => removeEventListener("storage", onStorage);
+  }, []);
   useEffect(() => {
     load();
   }, [load]);
