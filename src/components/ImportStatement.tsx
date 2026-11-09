@@ -7,7 +7,7 @@ import { Dropdown } from "@/components/Dropdown";
 import { Modal } from "@/components/Modal";
 import { toast } from "@/components/Toast";
 import { applyRules, RULE_COLS, type Rule } from "@/lib/rules";
-import { applyMapping, parseStatement, type DateOrder, type Mapping, type Parsed, type Row } from "@/lib/statement";
+import { applyMapping, categoryKey, parseStatement, type DateOrder, type Mapping, type Parsed, type Row } from "@/lib/statement";
 import { pdfToTable, type PdfItem } from "@/lib/statement-pdf";
 import { createClient } from "@/utils/supabase/client";
 
@@ -112,11 +112,16 @@ export function ImportStatement({ accounts, locale, currency, link = false, trig
       if (error) return setBusy(false), setErr("Couldn't create the account.");
       acct = data.id;
     }
-    const { data: rules } = await supabase.from("rules").select(RULE_COLS).order("created_at", { ascending: false });
+    const [{ data: rules }, { data: cats }] = await Promise.all([
+      supabase.from("rules").select(RULE_COLS).order("created_at", { ascending: false }),
+      supabase.from("categories").select("id, key, label").is("user_id", null),
+    ]);
+    const catId = Object.fromEntries((cats ?? []).map((c) => [c.key, c.id]));
+    const labels = Object.fromEntries((cats ?? []).map((c) => [c.key, c.label]));
     const rows = result.rows.map((r) => {
       const p = applyRules((rules ?? []) as Rule[], { ...r, account_id: acct });
       return { account_id: acct, date: r.date, amount: r.amount, name: r.name, merchant_name: r.name, import_key: r.key, manual: true,
-        category_id: p.category_id ?? null, custom_name: p.custom_name ?? null, ignored: p.ignored ?? false, tags: p.tags ?? [] };
+        category_id: p.category_id ?? catId[categoryKey(r.category, labels) ?? ""] ?? null, custom_name: p.custom_name ?? null, ignored: p.ignored ?? false, tags: p.tags ?? [] };
     });
     let added = 0;
     for (let i = 0; i < rows.length; i += 500) {

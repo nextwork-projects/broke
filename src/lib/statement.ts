@@ -1,11 +1,11 @@
 // Bank statement import: CSV, OFX and QIF to transactions. Pure, no "@/" imports, so statement.test.ts runs with plain node.
 // Output uses the app's sign: positive = money out.
 
-export type Row = { date: string; amount: number; name: string; key: string };
+export type Row = { date: string; amount: number; name: string; key: string; category?: string };
 export type Table = { header: string[]; rows: string[][] };
 export type DateOrder = "dmy" | "mdy" | "ymd";
 // Column indexes; -1 = not used. A single signed amount, or separate debit (out) and credit (in) columns.
-export type Mapping = { date: number; name: number; amount: number; debit: number; credit: number; order: DateOrder; outPositive: boolean };
+export type Mapping = { date: number; name: number; amount: number; debit: number; credit: number; order: DateOrder; outPositive: boolean; category?: number };
 export type Parsed = { kind: "csv"; table: Table; mapping: Mapping } | { kind: "ofx" | "qif"; rows: Row[] };
 
 const MONTHS = ["jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"];
@@ -142,7 +142,8 @@ export function guessMapping(t: Table, locale: string): Mapping {
   const amount = find(h, [/^amount$/, /^amount\b/, /amount/, /betrag|montant|importe|importo|bedrag|belopp|monto|valor/], /balance|foreign|local|credit|debit|\bcr\b|\bdr\b/);
   const debit = amount >= 0 ? -1 : find(h, [/withdrawal/, /debit/, /money out/, /paid out/, /^dr$/, /\bout\b/]);
   const credit = amount >= 0 ? -1 : find(h, [/deposit/, /credit/, /money in/, /paid in/, /^cr$/, /\bin\b/]);
-  return { date, name, amount, debit, credit, order: dateOrder(date >= 0 ? col(date) : [], locale), outPositive: false };
+  const category = find(h, [/^category$/, /categor/]);
+  return { date, name, amount, debit, credit, order: dateOrder(date >= 0 ? col(date) : [], locale), outPositive: false, category };
 }
 
 // Stable dedupe keys: the same date, amount and name gets 1, 2, 3... in file order, so re-importing adds nothing.
@@ -173,7 +174,10 @@ export function applyMapping(t: Table, m: Mapping, locale: string): { rows: Row[
     }
     const name = (m.name >= 0 ? r[m.name] ?? "" : "").replace(/\s+/g, " ").trim();
     if (!date || amount === null || !amount) skipped++;
-    else out.push({ date, amount: Math.round(amount * 100) / 100, name: name || "Imported transaction" });
+    else {
+      const category = (m.category ?? -1) >= 0 ? (r[m.category!] ?? "").trim() : "";
+      out.push({ date, amount: Math.round(amount * 100) / 100, name: name || "Imported transaction", ...(category && { category }) });
+    }
   }
   return { rows: withKeys(out), skipped };
 }
@@ -214,4 +218,30 @@ export function parseStatement(text: string, filename: string, locale: string): 
   }
   const table = readTable(text);
   return { kind: "csv", table, mapping: guessMapping(table, locale) };
+}
+
+// A bank's own category name (Chase, Amex, Monzo exports) to broke's category key. null = leave it unsorted.
+const CATEGORY_WORDS: [RegExp, string][] = [
+  [/payroll|salary|paycheck|wage|income|deposit|refund/, "INCOME"],
+  [/grocer|supermarket/, "GROCERIES"],
+  [/restaurant|dining|food|drink|coffee|cafe|takeaway|eating/, "FOOD_AND_DRINK"],
+  [/rent|mortgage|bill|utilit|electric|internet|phone|mobile|insurance/, "RENT_AND_UTILITIES"],
+  [/gas|fuel|auto|transport|car|uber|taxi|parking|transit/, "TRANSPORTATION"],
+  [/travel|flight|airline|hotel|holiday/, "TRAVEL"],
+  [/entertain|subscription|stream|movie|music|game/, "ENTERTAINMENT"],
+  [/health|medical|pharmac|doctor|dental|fitness|gym/, "MEDICAL"],
+  [/personal|beauty|hair/, "PERSONAL_CARE"],
+  [/shop|merchandise|retail|clothing/, "GENERAL_MERCHANDISE"],
+  [/home|garden|hardware/, "HOME_IMPROVEMENT"],
+  [/transfer|saving/, "TRANSFER_OUT"],
+  [/fee|interest|charge/, "BANK_FEES"],
+  [/tax|gift|donat|charit/, "GOVERNMENT_AND_NON_PROFIT"],
+  [/loan/, "LOAN_PAYMENTS"],
+  [/service/, "GENERAL_SERVICES"],
+];
+export function categoryKey(text: string | undefined, labels: Record<string, string> = {}): string | null {
+  const t = (text ?? "").toLowerCase().trim();
+  if (!t) return null;
+  for (const [key, label] of Object.entries(labels)) if (label.toLowerCase() === t) return key;
+  return CATEGORY_WORDS.find(([re]) => re.test(t))?.[1] ?? null;
 }

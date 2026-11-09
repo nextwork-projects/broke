@@ -1,7 +1,7 @@
 // node src/lib/statement.test.ts
 // Samples are shaped like each bank's export (columns, date style, preamble); names and amounts are made up.
 import assert from "node:assert/strict";
-import { applyMapping, dateOrder, parseAmount, parseDate, parseStatement, type Row } from "./statement.ts";
+import { applyMapping, categoryKey, dateOrder, parseAmount, parseDate, parseStatement, type Row } from "./statement.ts";
 
 const csv = (text: string, locale: string) => {
   const p = parseStatement(text, "statement.csv", locale);
@@ -134,3 +134,15 @@ if (qif.kind === "qif") assert.deepEqual(brief(qif.rows), [["2026-10-02", 42.1, 
 else assert.fail("qif");
 
 console.log("statement ok");
+
+// A Category column (Chase-style) comes through on each row and maps to broke's keys.
+{
+  const c = csv("Date,Description,Category,Amount\n11/08/2026,Comcast,Bills & Utilities,-65.00\n11/07/2026,Whole Foods,Groceries,-72.24\n11/06/2026,Northwind Payroll,Paycheck,2150.00\n", "en-US");
+  assert.deepEqual(c.rows.map((r) => r.category), ["Bills & Utilities", "Groceries", "Paycheck"]);
+  assert.equal(categoryKey("Bills & Utilities"), "RENT_AND_UTILITIES");
+  assert.equal(categoryKey("Food & Drink"), "FOOD_AND_DRINK");
+  assert.equal(categoryKey("Gas"), "TRANSPORTATION");
+  assert.equal(categoryKey("Dining & drinks", { FOOD_AND_DRINK: "Dining & drinks" }), "FOOD_AND_DRINK");
+  assert.equal(categoryKey(""), null);
+  assert.equal(categoryKey("Miscellaneous"), null);
+}

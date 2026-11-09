@@ -29,7 +29,8 @@ export async function GET() {
       .or("plaid_category.eq.BANK_FEES_INTEREST_CHARGE,name.ilike.*interest charge*").order("id").range(a, b)),
   ]);
 
-  const own = (accts ?? []).filter((a) => a.type !== "investment" && !a.manual); // linked, not the debts typed in below
+  // Linked or imported from a statement (a manual depository account), not the debts typed in below.
+  const own = (accts ?? []).filter((a) => a.type !== "investment" && (!a.manual || a.type === "depository"));
   const s = (streams ?? []) as unknown as Stream[];
   const base = { accounts: own.length };
 
