@@ -151,6 +151,16 @@ export async function listProjects(): Promise<Project[]> {
   }
 }
 
+/** The organizations this sign-in was approved for (Supabase's approval page picks them). */
+export async function listOrgs(): Promise<{ id: string; name: string }[]> {
+  const client = await connectClient(load());
+  try {
+    return listOf<{ id: string; name: string }>(unwrap(await call(client, "list_organizations", {})), "organizations").map((o) => ({ id: o.id, name: o.name }));
+  } finally {
+    await client.close().catch(() => {});
+  }
+}
+
 /** Picks a project: its address and publishable key, read through the sign-in. Saves the choice for the migrations. */
 export async function projectKeys(ref: string) {
   const s = load();

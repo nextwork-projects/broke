@@ -214,10 +214,11 @@ type Project = { id: string; name: string; region?: string; status?: string };
 // public key and creates the tables (POST /api/setup/supabase/project).
 export function ProjectPicker({ onDone }: { onDone: () => void }) {
   const [projects, setProjects] = useState<Project[] | null>(null);
+  const [orgs, setOrgs] = useState<string[]>([]);
   const [busy, setBusy] = useState<string | null>(null);
   const [msg, setMsg] = useState("");
   useEffect(() => {
-    fetch("/api/setup/supabase/project").then((r) => r.json()).then((b: { projects?: Project[]; error?: string }) => (b.error ? setMsg(b.error) : setProjects(b.projects ?? []))).catch(() => setMsg("Couldn't reach broke. Is it still running?"));
+    fetch("/api/setup/supabase/project").then((r) => r.json()).then((b: { projects?: Project[]; orgs?: string[]; error?: string }) => { if (b.error) setMsg(b.error); else { setProjects(b.projects ?? []); setOrgs(b.orgs ?? []); } }).catch(() => setMsg("Couldn't reach broke. Is it still running?"));
   }, []);
   async function use(body: { ref?: string; create?: boolean }, label: string) {
     setBusy(label);
@@ -229,8 +230,10 @@ export function ProjectPicker({ onDone }: { onDone: () => void }) {
     else setMsg(b?.error ?? "That didn't work. Try again.");
   }
   if (!projects && !msg) return <p className="text-sm text-muted">Finding your projects…</p>;
+  const where = orgs.length ? `Supabase organization${orgs.length > 1 ? "s" : ""} ${orgs.map((o) => `“${o}”`).join(", ")}` : "your Supabase account";
   return (
     <div className="space-y-3">
+      <p className="text-sm text-muted">{projects?.length ? `Projects in ${where}:` : `Connected to ${where}, which has no projects yet.`}</p>
       {!!projects?.length && (
         <ul className="space-y-2">
           {projects.map((p) => (
@@ -247,7 +250,7 @@ export function ProjectPicker({ onDone }: { onDone: () => void }) {
       {msg && <p className="text-sm text-bad">{msg}</p>}
       <div className="pt-1 space-y-1">
         <ConnectSupabaseButton onDone={onDone} fresh quiet label="Use a different Supabase organization" />
-        <p className="text-xs text-muted">Signs in to Supabase again, so you can choose the organization that has the project you want.</p>
+        <p className="text-xs text-muted">Signs in to Supabase again. On Supabase&apos;s approval page, change the organization to the one that has the project you want before you approve.</p>
       </div>
     </div>
   );

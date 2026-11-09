@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { sameOrigin, setupAccess } from "@/lib/setup";
 import { fillFrom } from "@/lib/supabase-fill";
-import { accountConnected, createProject, listProjects } from "@/lib/supabase-mcp";
+import { accountConnected, createProject, listOrgs, listProjects } from "@/lib/supabase-mcp";
 
 const LOOPBACK = /^(localhost|127\.0\.0\.1|\[::1\])(:\d+)?$/;
 const local = async (request: Request) => LOOPBACK.test(request.headers.get("host") ?? "") && (await setupAccess()).allowed && accountConnected();
@@ -11,7 +11,8 @@ const local = async (request: Request) => LOOPBACK.test(request.headers.get("hos
 export async function GET(request: Request) {
   if (!(await local(request))) return NextResponse.json({ error: "Only on this computer, after Connect Supabase." }, { status: 403 });
   try {
-    return NextResponse.json({ projects: await listProjects() });
+    const [projects, orgs] = await Promise.all([listProjects(), listOrgs()]);
+    return NextResponse.json({ projects, orgs: orgs.map((o) => o.name) });
   } catch (e) {
     console.error("[broke] supabase projects:", e instanceof Error ? e.message : e);
     return NextResponse.json({ error: "Couldn't list your Supabase projects. Press Connect Supabase again." }, { status: 502 });
