@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import { Logo } from "@/components/Logo";
 import type { AiRow, Part, Section, SetupStatus } from "@/lib/setup";
-import { CopyCommand, KeyForm, ConnectSupabaseButton, MigrateButton } from "./SetupActions";
+import { CopyCommand, CountryPick, KeyForm, ConnectSupabaseButton, MigrateButton } from "./SetupActions";
 
 export function ExtLink({ href, children }: { href: string; children: React.ReactNode }) {
   return (
@@ -83,9 +83,8 @@ export function SetupChecklist({ signedIn }: { signedIn: boolean }) {
   const main = sections.filter((s) => s.kind !== "more");
   const more = sections.filter((s) => s.kind === "more");
   const required = main.filter((s) => s.kind === "required");
-  const done = required.filter((s) => s.status === "done").length;
   const next = required.find((s) => s.status !== "done");
-  const canSkipBank = next?.id === "plaid"; // the database works, so broke can open: statements can be imported without a bank feed
+  const canSkipBank = next?.country !== undefined; // the database works, so broke can open: statements can be imported without a bank feed
 
   return (
     <main className="min-h-screen bg-canvas px-4 py-8 md:py-12">
@@ -97,7 +96,7 @@ export function SetupChecklist({ signedIn }: { signedIn: boolean }) {
 
         <section className="card p-7 space-y-5">
           <div className="space-y-1">
-            <h1 className="text-2xl font-semibold">{!data ? "Set up broke" : !next ? "You're all set" : `Step ${done + 1} of ${required.length}: ${next.title}`}</h1>
+            <h1 className="text-2xl font-semibold">{!data ? "Set up broke" : !next ? "You're all set" : `Step ${required.indexOf(next) + 1} of ${required.length}: ${next.title}`}</h1>
             <p className="text-sm text-muted">
               {!data ? "Checking what's connected… " : !next ? "Open broke and sign in with your email. " : "It's free. Follow the steps below and paste each key in. "}
               Your keys stay on this computer.
@@ -186,6 +185,7 @@ function SectionCard({ s, n, open, onToggle, data, signedIn, reload }: { s: Sect
       </button>
       <Collapse open={open}>
         <div className="px-6 pb-6 pt-1 @md:pl-[4.25rem] space-y-4">
+          {s.country !== undefined && <CountryPick key={s.country} saved={s.country} canWrite={data.canWrite} writeNote={data.writeNote} onSaved={reload} />}
           <Body s={s} data={data} signedIn={signedIn} reload={reload} />
         </div>
       </Collapse>

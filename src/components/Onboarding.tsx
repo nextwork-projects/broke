@@ -177,15 +177,20 @@ function ResultStep({ finish, back }: { finish: (href: string) => void; back: ()
   );
 }
 
-export function Onboarding({ profile: initial, start, choices }: { profile: Profile; start: Step; choices: AddChoices }) {
+export function Onboarding({ profile: initial, start, setupCountry, choices }: { profile: Profile; start: Step; setupCountry?: string; choices: AddChoices }) {
   const router = useRouter();
-  const [profile, setProfile] = useState<Profile>(initial);
-  const [step, setStep] = useState<Step>(STEPS.includes(start) ? start : "result");
+  // Setup step 3 already asked where they live: save that and start at the bank step.
+  const preset = start === "country" && setupCountry ? { ...initial, country: setupCountry, currency: countryOf(setupCountry).currency, onboarding: "bank" } : null;
+  const [profile, setProfile] = useState<Profile>(preset ?? initial);
+  const [step, setStep] = useState<Step>(preset ? "bank" : STEPS.includes(start) ? start : "result");
   const [info, setInfo] = useState<Info | null>(null);
   // Writes run one after another so a later step never lands before an earlier one.
   const queue = useRef<Promise<unknown>>(Promise.resolve());
   const write = (p: Profile) => (queue.current = queue.current.then(() => updateMeta(createClient(), { data: { profile: p } })));
 
+  useEffect(() => {
+    if (preset) write(preset).then(() => router.refresh());
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (step !== "country" && step !== "result") load().then(setInfo);
   }, [step === "country"]); // eslint-disable-line react-hooks/exhaustive-deps
