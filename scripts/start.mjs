@@ -16,7 +16,9 @@ if (Number(process.versions.node.split(".")[0]) < 20) {
 const win = process.platform === "win32";
 const npm = (...args) => spawnSync("npm", args, { stdio: "inherit", shell: win }).status === 0;
 // npm ci installs exactly what the repo pins and leaves package-lock.json as it is (so `npm run update` stays clean).
-if (!existsSync("node_modules") && !npm("ci") && !npm("install")) process.exit(1);
+// Checks for next itself, not node_modules: a stopped first install leaves a half-full node_modules.
+const nextBin = join("node_modules", ".bin", win ? "next.cmd" : "next");
+if (!existsSync(nextBin) && !npm("ci") && !npm("install")) process.exit(1);
 
 const env = {};
 for (const f of [".env", ".env.local"]) {
@@ -52,7 +54,7 @@ const built = existsSync(".next/BUILD_ID") ? statSync(".next/BUILD_ID").mtimeMs 
 const stale = Math.max(...["src", "public", "package-lock.json", "next.config.ts", ".env", ".env.local"].map(newest)) > built;
 if (ready && !stale) console.log("Nothing changed since the last build: starting it.");
 if (ready && stale && !npm("run", "build")) process.exit(1);
-const next = join("node_modules", ".bin", win ? "next.cmd" : "next");
+const next = nextBin;
 // Listens on this computer only, which is what makes saving keys from the page safe (writeGate checks the rest).
 const args = ready ? ["start", "-H", "127.0.0.1", "-p", String(port)] : ["dev", "--turbopack", "-H", "127.0.0.1", "-p", String(port)];
 const server = spawn(next, args, { stdio: "inherit", shell: win, env: { ...process.env, ALLOW_SETUP_WRITES: "1" } });
