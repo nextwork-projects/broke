@@ -5,7 +5,7 @@ import * as llmConfig from "@/lib/llm/config";
 import { probeLocal, providers } from "@/lib/llm/providers";
 import { describe, ENV_KEYS, isPlaceholder, readEnv } from "@/lib/envfile";
 import { migrate } from "@/lib/migrate";
-import { accountConnected, mcpConnected } from "@/lib/supabase-mcp";
+import { mcpConnected } from "@/lib/supabase-mcp";
 import { cardReferralSection } from "@/lib/cards-data";
 import { akahuTokens } from "@/lib/providers";
 import { akahuGet } from "@/lib/providers/akahu";
@@ -25,8 +25,7 @@ export type Section = {
   steps?: Part[][];
   fields?: Field[];
   command?: string;
-  action?: "migrate" | "connect" | "pick";
-  fallback?: string; // the label over the steps and boxes when a button comes first
+  action?: "migrate" | "connect";
   providers?: AiRow[];
 };
 export type SetupStatus = { sections: Section[]; ready: boolean; canWrite: boolean; writeNote?: string };
@@ -104,7 +103,7 @@ export async function setupStatus(signedIn: boolean): Promise<SetupStatus> {
     status: sb?.ok ? "done" : sb ? "error" : "todo",
     note: sb?.ok ? (ref ? `Project ${ref}` : sb.message) : sb?.message,
     steps: [
-      ["Make a new project at ", { href: "https://supabase.com/dashboard/new", label: "supabase.com" }, ". Any name works. Write down the database password you choose."],
+      ["Make a free account and a new project at ", { href: "https://supabase.com/dashboard/new", label: "supabase.com" }, ". Any name works. Write down the database password you choose: you need it in the next step."],
       ["When the project is ready, open ", { href: dash("/settings/api-keys"), label: "Project Settings → API Keys" }, "."],
       ["Copy three things from that page into the boxes below, then press Save."],
     ],
@@ -114,30 +113,13 @@ export async function setupStatus(signedIn: boolean): Promise<SetupStatus> {
       SUPABASE_SERVICE_ROLE_KEY: { placeholder: "sb_secret_…", help: "Under Secret keys: press the eye to show it, then copy. Starts with sb_secret_." },
     }),
   };
-  // The easy way first: Connect Supabase signs in to the account, picks (or makes) the project and fills in its address and
-  // public key. Then only the secret key is pasted: the sign-in can't read it, by Supabase's design.
-  if (!sb?.ok) {
-    const filled = isSet(env.NEXT_PUBLIC_SUPABASE_URL) && isSet(env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY);
-    if (filled && !isSet(env.SUPABASE_SERVICE_ROLE_KEY)) {
-      supabase.note = "Your project's address and public key are in. One key left.";
-      supabase.steps = [
-        ["Open ", { href: dash("/settings/api-keys"), label: "Project Settings → API Keys" }, " in Supabase."],
-        ["Under Secret keys, press the eye to show the key, copy it, paste it below and press Save."],
-      ];
-      supabase.fields = fields(env, ["SUPABASE_SERVICE_ROLE_KEY"], { SUPABASE_SERVICE_ROLE_KEY: { placeholder: "sb_secret_…", help: "Starts with sb_secret_. It stays on this computer." } });
-    } else if (!filled) {
-      supabase.action = accountConnected() ? "pick" : "connect";
-      supabase.note = accountConnected() ? "Pick the project broke should use, or make a new one." : "Make a free account at supabase.com if you don't have one, then press Connect Supabase. broke finds your project, or makes one, and fills in its address and public key.";
-      supabase.fallback = "Button didn't work? Paste all three yourself";
-    }
-  }
 
   let database: Section = {
     id: "database", kind: "required",
     title: "Turn on your database",
     what: "broke creates its own tables and keeps them up to date.",
     status: "todo",
-    note: "Press the button, sign in to Supabase and approve broke. Nothing to copy.",
+    note: undefined,
     action: "connect",
     steps: [
       ["In Supabase, press ", { href: dash("?showConnect=true"), label: "Connect" }, " at the top of your project."],

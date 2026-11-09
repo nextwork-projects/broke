@@ -171,20 +171,20 @@ export function MigrateButton({ onDone }: { onDone: () => void }) {
 }
 
 // One click: Supabase's own sign-in page, then back to /setup with the tables created.
-export function ConnectSupabaseButton({ onDone, onFail, fresh = false, label = "Connect Supabase", quiet = false }: { onDone: () => void; onFail?: () => void; fresh?: boolean; label?: string; quiet?: boolean }) {
+export function ConnectSupabaseButton({ onDone, onFail }: { onDone: () => void; onFail?: () => void }) {
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState("");
   return (
     <div className="flex flex-wrap items-center gap-3">
       <button
-        className={quiet ? "btn" : "btn-primary"}
+        className="btn"
         disabled={busy}
         onClick={async () => {
           setBusy(true);
           setMsg("");
           // Supabase opens in its own tab, so broke stays put. Opened now, while the click still counts, or it's blocked.
           const tab = window.open("", "_blank");
-          const res = await fetch("/api/setup/supabase/connect", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ fresh }) });
+          const res = await fetch("/api/setup/supabase/connect", { method: "POST" });
           const body = await res.json().catch(() => ({}));
           if (body.url) {
             if (tab) tab.location.href = body.url;
@@ -201,57 +201,10 @@ export function ConnectSupabaseButton({ onDone, onFail, fresh = false, label = "
           onDone();
         }}
       >
-        {busy ? "Opening Supabase..." : label}
+        {busy ? "Opening Supabase..." : "Connect Supabase"}
       </button>
       {msg && <span className="text-sm text-bad">{msg}</span>}
     </div>
   );
 }
 
-type Project = { id: string; name: string; region?: string; status?: string };
-
-// After Connect Supabase: the account's projects, or a new free one called broke. Picking fills in its address and
-// public key and creates the tables (POST /api/setup/supabase/project).
-export function ProjectPicker({ onDone }: { onDone: () => void }) {
-  const [projects, setProjects] = useState<Project[] | null>(null);
-  const [orgs, setOrgs] = useState<string[]>([]);
-  const [busy, setBusy] = useState<string | null>(null);
-  const [msg, setMsg] = useState("");
-  useEffect(() => {
-    fetch("/api/setup/supabase/project").then((r) => r.json()).then((b: { projects?: Project[]; orgs?: string[]; error?: string }) => { if (b.error) setMsg(b.error); else { setProjects(b.projects ?? []); setOrgs(b.orgs ?? []); } }).catch(() => setMsg("Couldn't reach broke. Is it still running?"));
-  }, []);
-  async function use(body: { ref?: string; create?: boolean }, label: string) {
-    setBusy(label);
-    setMsg("");
-    const res = await fetch("/api/setup/supabase/project", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }).catch(() => null);
-    const b = (await res?.json().catch(() => ({}))) as { error?: string } | undefined;
-    setBusy(null);
-    if (res?.ok) onDone();
-    else setMsg(b?.error ?? "That didn't work. Try again.");
-  }
-  if (!projects && !msg) return <p className="text-sm text-muted">Finding your projects…</p>;
-  const where = orgs.length ? `Supabase organization${orgs.length > 1 ? "s" : ""} ${orgs.map((o) => `“${o}”`).join(", ")}` : "your Supabase account";
-  return (
-    <div className="space-y-3">
-      <p className="text-sm text-muted">{projects?.length ? `Projects in ${where}:` : `Connected to ${where}, which has no projects yet.`}</p>
-      {!!projects?.length && (
-        <ul className="space-y-2">
-          {projects.map((p) => (
-            <li key={p.id} className="flex items-center justify-between gap-3 rounded-xl border border-line px-4 py-3">
-              <span className="min-w-0"><span className="block font-medium truncate">{p.name}</span><span className="block text-xs text-muted">{p.id}{p.region ? ` · ${p.region}` : ""}</span></span>
-              <button className="btn shrink-0" disabled={!!busy} onClick={() => use({ ref: p.id }, p.id)}>{busy === p.id ? "Setting up…" : "Use this one"}</button>
-            </li>
-          ))}
-        </ul>
-      )}
-      <button className={projects?.length ? "btn" : "btn-primary"} disabled={!!busy} onClick={() => use({ create: true }, "new")}>
-        {busy === "new" ? "Making your project… about a minute" : "Make a new free project called broke"}
-      </button>
-      {msg && <p className="text-sm text-bad">{msg}</p>}
-      <div className="pt-1 space-y-1">
-        <ConnectSupabaseButton onDone={onDone} fresh quiet label="Use a different Supabase organization" />
-        <p className="text-xs text-muted">Signs in to Supabase again. On Supabase&apos;s approval page, change the organization to the one that has the project you want before you approve.</p>
-      </div>
-    </div>
-  );
-}

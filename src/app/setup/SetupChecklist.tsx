@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import { Logo } from "@/components/Logo";
 import type { AiRow, Part, Section, SetupStatus } from "@/lib/setup";
-import { CopyCommand, KeyForm, ConnectSupabaseButton, MigrateButton, ProjectPicker } from "./SetupActions";
+import { CopyCommand, KeyForm, ConnectSupabaseButton, MigrateButton } from "./SetupActions";
 
 export function ExtLink({ href, children }: { href: string; children: React.ReactNode }) {
   return (
@@ -214,16 +214,16 @@ export function Body({ s, data, signedIn, reload }: { s: Section; data: SetupSta
     <>
       {s.note && s.status !== "done" && s.status !== "error" && <p className="text-sm">{s.note}</p>}
       {s.note && s.status === "done" && s.kind === "more" && <p className="text-sm">{s.note}</p>}
-      {s.action === "connect" && <ConnectSupabaseButton onDone={reload} onFail={() => setFallback(true)} />}
-      {s.action === "pick" && <ProjectPicker onDone={() => window.location.reload()} />}
-      {(s.action === "connect" || s.action === "pick") && (s.steps || s.fields) ? (
-        <details className="text-sm" open={fallback} onToggle={(e) => setFallback(e.currentTarget.open)}>
-          <summary className="cursor-pointer text-muted hover:text-ink">{s.fallback ?? "Button didn't work? Paste a connection string instead"}</summary>
-          <div className="pt-3 space-y-4">
-            <Steps steps={s.steps} />
-            {form}
-          </div>
-        </details>
+      {s.action === "connect" && (s.steps || s.fields) ? (
+        // Step 2: paste the connection string and password (the reliable way), or sign in to Supabase instead.
+        <>
+          <Steps steps={s.steps} />
+          {form}
+          <details className="text-sm" open={fallback} onToggle={(e) => setFallback(e.currentTarget.open)}>
+            <summary className="cursor-pointer text-muted hover:text-ink">Or sign in to Supabase instead of pasting</summary>
+            <div className="pt-3"><ConnectSupabaseButton onDone={reload} /></div>
+          </details>
+        </>
       ) : s.status === "done" && s.kind !== "more" && s.fields ? (
         // Connected: the steps and empty boxes are noise now. They stay one click away for changing a key.
         <details className="text-sm">

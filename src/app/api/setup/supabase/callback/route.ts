@@ -1,8 +1,6 @@
 import { NextResponse } from "next/server";
 import { migrate } from "@/lib/migrate";
-import { currentEnv } from "@/lib/setup";
-import { accountConnected, finishConnect, listProjects } from "@/lib/supabase-mcp";
-import { fillFrom } from "@/lib/supabase-fill";
+import { finishConnect } from "@/lib/supabase-mcp";
 
 // Supabase sends the browser back here after "Approve". Finish the sign-in, then bring the tables up to date.
 // The result goes back as a code (DB_MESSAGES on the Setup page), never as text, so the link can't carry a message.
@@ -16,17 +14,6 @@ export async function GET(request: Request) {
   } catch (e) {
     console.error("[broke] supabase callback:", e instanceof Error ? e.message : e);
     return back(e instanceof Error && /didn't start/.test(e.message) ? "elsewhere" : "rejected");
-  }
-  // Signed in to the whole account with no project set yet: one project is used straight away, several are picked on the page.
-  if (accountConnected() && !currentEnv().NEXT_PUBLIC_SUPABASE_URL?.includes(".supabase.co")) {
-    try {
-      const projects = await listProjects();
-      if (projects.length !== 1) return back(projects.length ? "pick" : "no-project");
-      return back((await fillFrom(projects[0].id)).tables ? "filled" : "filled-no-tables");
-    } catch (e) {
-      console.error("[broke] supabase fill:", e instanceof Error ? e.message : e);
-      return back("pick");
-    }
   }
   const r = await migrate();
   return back(r.error ? "update-failed" : r.applied.length ? "updated" : "current");

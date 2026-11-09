@@ -4,15 +4,14 @@ import { refFromUrl, startConnect } from "@/lib/supabase-mcp";
 
 const LOOPBACK = /^(localhost|127\.0\.0\.1|\[::1\])(:\d+)?$/;
 
-// "Connect Supabase": returns the Supabase approval page, for this project or (before one is set) the whole account. Localhost only.
+// "Connect Supabase": returns the Supabase approval page for this project. Localhost only.
 export async function POST(request: Request) {
   const host = request.headers.get("host") ?? "";
   if (!LOOPBACK.test(host) || !(await setupAccess()).allowed) return NextResponse.json({ error: "Only on this computer." }, { status: 403 });
-  // No project yet: sign in to the whole account, and broke picks (or makes) the project after.
   const ref = refFromUrl(currentEnv().NEXT_PUBLIC_SUPABASE_URL);
+  if (!ref) return NextResponse.json({ error: "Add your Supabase Project URL first." }, { status: 400 });
   try {
-    const { fresh } = (await request.json().catch(() => ({}))) as { fresh?: boolean };
-    const url = await startConnect(fresh ? undefined : ref, `http://${host}/api/setup/supabase/callback`, !!fresh);
+    const url = await startConnect(ref, `http://${host}/api/setup/supabase/callback`);
     return NextResponse.json(url ? { url } : { connected: true });
   } catch (e) {
     console.error("[broke] supabase connect:", e instanceof Error ? e.message : e);
