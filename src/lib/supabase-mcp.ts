@@ -11,7 +11,7 @@ import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/
 import type { OAuthClientInformationMixed, OAuthTokens } from "@modelcontextprotocol/sdk/shared/auth.js";
 
 const FILE = join(homedir(), ".broke", "supabase-mcp.json");
-type Saved = { ref?: string; redirect?: string; client?: OAuthClientInformationMixed; tokens?: OAuthTokens; verifier?: string; state?: string };
+type Saved = { ref?: string; all?: boolean; redirect?: string; client?: OAuthClientInformationMixed; tokens?: OAuthTokens; verifier?: string; state?: string };
 
 const load = (): Saved => {
   try {
@@ -26,7 +26,9 @@ const save = (patch: Saved) => {
   chmodSync(FILE, 0o600);
 };
 
-const serverUrl = (ref: string) => `https://mcp.supabase.com/mcp?project_ref=${ref}`;
+// One project (the older flow), or the whole account (all: the setup page's first step, which picks the project after).
+const serverUrl = (ref?: string) => (ref ? `https://mcp.supabase.com/mcp?project_ref=${ref}` : "https://mcp.supabase.com/mcp");
+const urlOf = (s: Saved) => serverUrl(s.all ? undefined : s.ref);
 export const refFromUrl = (url?: string) => url?.match(/https:\/\/([a-z0-9]+)\.supabase\.co/)?.[1];
 
 function provider(redirect: string, onRedirect?: (u: URL) => void): OAuthClientProvider {
@@ -60,10 +62,13 @@ export const mcpConnected = (ref?: string) => {
 };
 
 /** Starts the sign-in. Returns the Supabase approval page to send the browser to, or null if already signed in. */
-export async function startConnect(ref: string, redirect: string): Promise<string | null> {
+// ref undefined: sign in to the whole account, so broke can list projects and fill in the URL and public key itself.
+export async function startConnect(ref: string | undefined, redirect: string): Promise<string | null> {
   const s = load();
-  // A new project or a new callback address needs a fresh client registration and fresh tokens.
-  if (s.ref !== ref || s.redirect !== redirect) save({ ref, redirect, client: undefined, tokens: undefined });
+  const all = !ref;
+  // A new project, a change between one project and the whole account, or a new callback address needs fresh tokens.
+  if (all ? !s.all : s.all || s.ref !== ref) save({ ref, all, redirect, client: undefined, tokens: undefined });
+  else if (s.redirect !== redirect) save({ redirect, client: undefined, tokens: undefined });
   let url: URL | undefined;
   const r = await auth(provider(redirect, (u) => (url = u)), { serverUrl: serverUrl(ref) });
   return r === "AUTHORIZED" ? null : url!.toString();
@@ -72,8 +77,8 @@ export async function startConnect(ref: string, redirect: string): Promise<strin
 /** Finishes the sign-in from the callback. Throws on a wrong state (not our request) or a refused code. */
 export async function finishConnect(code: string, state: string | null) {
   const s = load();
-  if (!s.ref || !s.redirect || !state || state !== s.state) throw new Error("This sign-in didn't start on this computer. Press Connect Supabase again.");
-  await auth(provider(s.redirect), { serverUrl: serverUrl(s.ref), authorizationCode: code });
+  if ((!s.ref && !s.all) || !s.redirect || !state || state !== s.state) throw new Error("This sign-in didn't start on this computer. Press Connect Supabase again.");
+  await auth(provider(s.redirect), { serverUrl: urlOf(s), authorizationCode: code });
   save({ state: undefined, verifier: undefined });
 }
 
@@ -83,10 +88,9 @@ export type Exec = (sql: string) => Promise<Record<string, unknown>[]>;
 export async function mcpSession(): Promise<{ exec: Exec; close: () => Promise<void> }> {
   const s = load();
   if (!s.ref || !s.redirect) throw new Error("Supabase isn't connected.");
-  const client = new Client({ name: "broke", version: "1.0.0" });
-  await client.connect(new StreamableHTTPClientTransport(new URL(serverUrl(s.ref)), { authProvider: provider(s.redirect) }));
+  const client = await connectClient(s);
   const exec: Exec = async (query) => {
-    const res = await client.callTool({ name: "execute_sql", arguments: { query } });
+    const res = await client.callTool({ name: "execute_sql", arguments: s.all ? { project_id: s.ref, query } : { query } });
     const text = (res.content as { type: string; text?: string }[]).map((c) => c.text ?? "").join("");
     if (res.isError) throw new Error(text.slice(0, 500));
     // Rows come back wrapped: {"result":"...<untrusted-data-ID>\n[rows]\n</untrusted-data-ID>..."}.
@@ -100,4 +104,94 @@ export async function mcpSession(): Promise<{ exec: Exec; close: () => Promise<v
     return rows ? (JSON.parse(rows) as Record<string, unknown>[]) : [];
   };
   return { exec, close: () => client.close() };
+}
+
+async function connectClient(s: Saved) {
+  const client = new Client({ name: "broke", version: "1.0.0" });
+  await client.connect(new StreamableHTTPClientTransport(new URL(urlOf(s)), { authProvider: provider(s.redirect!) }));
+  return client;
+}
+
+// A tool's reply as text (whatever wrapping the server puts around it).
+async function call(client: Client, name: string, args: Record<string, unknown>) {
+  const res = await client.callTool({ name, arguments: args });
+  const text = (res.content as { type: string; text?: string }[]).map((c) => c.text ?? "").join("");
+  if (res.isError) throw new Error(text.slice(0, 300));
+  return text;
+}
+const unwrap = (text: string) => {
+  let body = text;
+  try { body = (JSON.parse(text) as { result?: string }).result ?? text; } catch { /* plain text */ }
+  return body.match(/<untrusted-data-[\w-]+>\s*([\s\S]*?)\s*<\/untrusted-data-[\w-]+>/)?.[1] ?? body;
+};
+
+/** Signed in to the whole account on this computer (the setup page's first step). */
+export const accountConnected = () => {
+  const s = load();
+  return !!s.all && !!s.tokens;
+};
+
+export type Project = { id: string; name: string; region?: string; status?: string };
+
+/** The projects this Supabase account can see. */
+export async function listProjects(): Promise<Project[]> {
+  const s = load();
+  const client = await connectClient(s);
+  try {
+    const raw = JSON.parse(unwrap(await call(client, "list_projects", {}))) as Project[] | { projects?: Project[] };
+    return (Array.isArray(raw) ? raw : raw.projects ?? []).map((p) => ({ id: p.id, name: p.name, region: p.region, status: p.status }));
+  } finally {
+    await client.close().catch(() => {});
+  }
+}
+
+/** Picks a project: its address and publishable key, read through the sign-in. Saves the choice for the migrations. */
+export async function projectKeys(ref: string) {
+  const s = load();
+  const client = await connectClient(s);
+  try {
+    const url = unwrap(await call(client, "get_project_url", { project_id: ref })).match(/https:\/\/[a-z0-9]+\.supabase\.co/)?.[0];
+    const keys = unwrap(await call(client, "get_publishable_keys", { project_id: ref }));
+    const key = keys.match(/sb_publishable_[\w-]+/)?.[0] ?? keys.match(/eyJ[\w-]+\.[\w-]+\.[\w-]+/)?.[0];
+    if (!url || !key) throw new Error("Supabase didn't return this project's address and key.");
+    save({ ref });
+    return { url, key };
+  } finally {
+    await client.close().catch(() => {});
+  }
+}
+
+// Calls a tool with only the inputs its own schema asks for, picked from what broke knows. The account tools' inputs
+// aren't documented, so this reads them from the server rather than guessing names.
+async function callFit(client: Client, name: string, pool: Record<string, unknown>) {
+  const { tools } = await client.listTools();
+  const props = Object.keys((tools.find((t) => t.name === name)?.inputSchema as { properties?: Record<string, unknown> } | undefined)?.properties ?? {});
+  return unwrap(await call(client, name, Object.fromEntries(props.filter((k) => k in pool).map((k) => [k, pool[k]]))));
+}
+
+/** Makes a free project called "broke" in the first organization, and waits until it's ready (a minute or two). */
+export async function createProject(region = "us-east-1") {
+  const s = load();
+  const client = await connectClient(s);
+  try {
+    const orgs = JSON.parse(unwrap(await call(client, "list_organizations", {}))) as { id: string }[];
+    if (!orgs.length) throw new Error("This Supabase account has no organization yet. Open supabase.com once to make one.");
+    const pool: Record<string, unknown> = { type: "project", organization_id: orgs[0].id, name: "broke", region, recurrence: "monthly" };
+    // Supabase asks to confirm the cost first. A free organization's project costs $0; anything else is the user's call.
+    const cost = await callFit(client, "get_cost", pool);
+    const amount = Number(cost.match(/"amount"\s*:\s*([\d.]+)/)?.[1] ?? cost.match(/\$\s*([\d.]+)/)?.[1] ?? 0);
+    if (amount > 0) throw new Error("A new project would cost money on this account. Make one yourself at supabase.com instead.");
+    pool.amount = amount;
+    const confirm = await callFit(client, "confirm_cost", pool);
+    pool.confirm_cost_id = (() => { try { return (JSON.parse(confirm) as { confirm_cost_id?: string; id?: string }).confirm_cost_id ?? JSON.parse(confirm).id; } catch { return confirm.match(/[A-Za-z0-9_-]{16,}/)?.[0] ?? confirm.trim(); } })();
+    const made = JSON.parse(await callFit(client, "create_project", pool)) as Project;
+    for (let i = 0; i < 60; i++) {
+      const p = JSON.parse(await callFit(client, "get_project", { id: made.id, project_id: made.id })) as Project;
+      if (p.status === "ACTIVE_HEALTHY") return made.id;
+      await new Promise((r) => setTimeout(r, 5000));
+    }
+    return made.id; // still starting: the next step says so if it isn't ready
+  } finally {
+    await client.close().catch(() => {});
+  }
 }

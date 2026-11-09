@@ -1,7 +1,7 @@
 "use client";
 
 import { Check, Copy, Eye, EyeOff } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { Field } from "@/lib/setup";
 
 export function CopyCommand({ command }: { command: string }) {
@@ -196,6 +196,47 @@ export function ConnectSupabaseButton({ onDone, onFail }: { onDone: () => void; 
         {busy ? "Opening Supabase..." : "Connect Supabase"}
       </button>
       {msg && <span className="text-sm text-bad">{msg}</span>}
+    </div>
+  );
+}
+
+type Project = { id: string; name: string; region?: string; status?: string };
+
+// After Connect Supabase: the account's projects, or a new free one called broke. Picking fills in its address and
+// public key and creates the tables (POST /api/setup/supabase/project).
+export function ProjectPicker({ onDone }: { onDone: () => void }) {
+  const [projects, setProjects] = useState<Project[] | null>(null);
+  const [busy, setBusy] = useState<string | null>(null);
+  const [msg, setMsg] = useState("");
+  useEffect(() => {
+    fetch("/api/setup/supabase/project").then((r) => r.json()).then((b: { projects?: Project[]; error?: string }) => (b.error ? setMsg(b.error) : setProjects(b.projects ?? []))).catch(() => setMsg("Couldn't reach broke. Is it still running?"));
+  }, []);
+  async function use(body: { ref?: string; create?: boolean }, label: string) {
+    setBusy(label);
+    setMsg("");
+    const res = await fetch("/api/setup/supabase/project", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }).catch(() => null);
+    const b = (await res?.json().catch(() => ({}))) as { error?: string } | undefined;
+    setBusy(null);
+    if (res?.ok) onDone();
+    else setMsg(b?.error ?? "That didn't work. Try again.");
+  }
+  if (!projects && !msg) return <p className="text-sm text-muted">Finding your projects…</p>;
+  return (
+    <div className="space-y-3">
+      {!!projects?.length && (
+        <ul className="space-y-2">
+          {projects.map((p) => (
+            <li key={p.id} className="flex items-center justify-between gap-3 rounded-xl border border-line px-4 py-3">
+              <span className="min-w-0"><span className="block font-medium truncate">{p.name}</span><span className="block text-xs text-muted">{p.id}{p.region ? ` · ${p.region}` : ""}</span></span>
+              <button className="btn shrink-0" disabled={!!busy} onClick={() => use({ ref: p.id }, p.id)}>{busy === p.id ? "Setting up…" : "Use this one"}</button>
+            </li>
+          ))}
+        </ul>
+      )}
+      <button className={projects?.length ? "btn" : "btn-primary"} disabled={!!busy} onClick={() => use({ create: true }, "new")}>
+        {busy === "new" ? "Making your project… about a minute" : "Make a new free project called broke"}
+      </button>
+      {msg && <p className="text-sm text-bad">{msg}</p>}
     </div>
   );
 }
