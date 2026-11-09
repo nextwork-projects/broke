@@ -11,4 +11,11 @@ command -v node >/dev/null || { echo "broke needs Node.js. Get the LTS version f
 
 if [ -d "$DIR/.git" ]; then echo "broke is already in $DIR. Starting it."; else git clone --quiet "$REPO" "$DIR"; fi
 cd "$DIR"
-exec node scripts/start.mjs
+
+# Adds a `broke` command, so a new Terminal window starts it again with one word.
+LINE="alias broke='node \"$DIR/scripts/start.mjs\"'"
+for RC in "$HOME/.zshrc" "$HOME/.bashrc" "$HOME/.bash_profile"; do
+  [ "$RC" = "$HOME/.zshrc" ] || [ -f "$RC" ] || continue # zsh is the Mac default; bash files only if they exist
+  grep -qxF "$LINE" "$RC" 2>/dev/null || printf '\n# broke\n%s\n' "$LINE" >> "$RC"
+done
+BROKE_TIP=1 exec node scripts/start.mjs

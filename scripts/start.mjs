@@ -65,7 +65,7 @@ for (let i = 0; i < 60; i++) {
   await new Promise((r) => setTimeout(r, 1000));
   const up = await fetch(url, { redirect: "manual" }).then(() => true, () => false);
   if (!up) continue;
-  console.log(`\nbroke is running at ${url}. Press Ctrl+C to stop it.\n`);
+  console.log(`\nbroke is running at ${url}. Press Ctrl+C to stop it.${process.env.BROKE_TIP ? "\nTo start it again later, open a new Terminal window and type: broke" : ""}\n`);
   openIt();
   break;
 }

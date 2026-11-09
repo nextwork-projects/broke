@@ -18,7 +18,7 @@ This puts broke in `~/broke` and opens a setup page. Paste in your keys there, o
 2. **Plaid** (free for test banks): your bank connection.
 3. **AI** (optional): broke finds Claude Code, Codex, Gemini CLI, opencode or a local model on your computer. Or connect OpenRouter in one click.
 
-To start it again: double-click **Start broke.command** on a Mac, or run `npm run app` in the folder.
+To start it again: open a new Terminal window and type `broke`.
 
 On Windows: `git clone https://github.com/nextwork-projects/broke`, then `npm run app` in that folder.
 
