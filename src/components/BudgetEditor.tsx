@@ -13,7 +13,7 @@ import { PageDates } from "@/components/PageDates";
 import { CATEGORY_ICON_KEYS, CategoryIcon } from "@/components/Icons";
 import { CountUp, EASE, firstVisit, reduced } from "@/components/motion";
 import { toast } from "@/components/Toast";
-import { budgetContext, daysBetween, merge, month, perDay, scaleBudget, startPeriod, step, tone, yearView, type MonthSpend } from "@/lib/budget";
+import { budgetContext, daysBetween, merge, month, perDay, retune, scaleBudget, startPeriod, step, tone, yearView, type MonthSpend } from "@/lib/budget";
 import { useMoney } from "@/components/Money";
 
 export type BudgetRange = { from: string; to: string; start: string; end: string; spent: Record<string, number> };
@@ -93,10 +93,13 @@ export function BudgetEditor({ basis, cats: all, initial, year, range, today, in
 
   // Fills main categories that have no budget yet; amounts you set stay.
   const suggestion = cats.filter((c) => c.main && !(c.id in budgets)).sort((a, b) => b.suggested - a.suggested);
+  // The Suggest sheet: budgets well off from real spending, plus main categories with none yet.
+  const retuned = retune(cats, budgets);
   // Saves exactly what the suggestion list shows after any edits.
-  const useSuggested = (picked: Record<string, number>) => {
+  const saveSuggested = (picked: Record<string, number>, verb = "Added") => {
     setSheet(null);
-    apply(picked, `Added ${Object.keys(picked).length} budgets`);
+    const n = Object.keys(picked).length;
+    apply(picked, `${verb} ${n} ${n === 1 ? "budget" : "budgets"}`);
   };
 
   const sheets = (
@@ -123,7 +126,10 @@ export function BudgetEditor({ basis, cats: all, initial, year, range, today, in
         <NewCategory taken={cats.map((c) => c.label)} onDone={(id, label, amount) => { setSheet(null); setBudgets((x) => ({ ...x, [id]: amount })); setFresh(id); toast(`Added ${label}`); }} />
       </Sheet>
       <Sheet open={sheet === "suggest"} onClose={() => setSheet(null)} title="Suggested budgets">
-        <Suggest key={suggestion.map((c) => c.id).join()} cats={suggestion} open={open} income={0} basis={basis} onUse={useSuggested} disabled={error === SETUP} sticky />
+        {/* Each open starts from the latest numbers. The AI button closes the sheet so the assistant isn't behind it. */}
+        <Suggest key={`${sheet}${retuned.map((c) => c.id).join()}`} cats={retuned} open={open} current={budgets} income={0} basis={basis} onUse={(p) => saveSuggested(p, "Updated")} disabled={error === SETUP} sticky
+          empty="Your budgets are close to what you really spend."
+          alt={aside && <div className="basis-full" onClickCapture={() => setSheet(null)}>{aside}</div>} />
       </Sheet>
     </>
   );
@@ -136,7 +142,7 @@ export function BudgetEditor({ basis, cats: all, initial, year, range, today, in
           <h2 className="text-2xl font-semibold">Set a budget from how you really spend</h2>
           <p className="text-sm text-muted">{basis} Press an amount to change it. Remove any you don&apos;t want, or add another.</p>
         </div>
-        <Suggest cats={suggestion} open={open} income={income} basis={basis} onUse={useSuggested} disabled={error === SETUP} alt={<button className="btn" onClick={() => setSheet("add")}>Add one at a time</button>} />
+        <Suggest cats={suggestion} open={open} income={income} basis={basis} onUse={saveSuggested} disabled={error === SETUP} alt={<button className="btn" onClick={() => setSheet("add")}>Add one at a time</button>} />
         {error && <div className="px-6 md:px-8 pb-6"><ErrorNote error={error} /></div>}
         {sheets}
       </div>
@@ -561,13 +567,14 @@ function Editor({ label, value, onSave, onCancel, onDelete }: { label: string; v
 
 // The suggested budgets, the usual month per category, as a draft: change an amount, remove a row or add a category
 // before saving. Nothing saves until Use these, which saves exactly the rows shown.
-function Suggest({ cats, open, income, basis, onUse, disabled, alt, sticky }: { cats: BudgetCat[]; open: BudgetCat[]; income: number; basis: string; onUse: (picked: Record<string, number>) => void; disabled: boolean; alt?: React.ReactNode; sticky?: boolean }) {
+// With `current` (budgets you already have), a row with a budget shows the change: $650 → $350.
+function Suggest({ cats, open, current, income, basis, onUse, disabled, alt, sticky, empty = "Nothing to suggest right now." }: { cats: BudgetCat[]; open: BudgetCat[]; current?: Record<string, number>; income: number; basis: string; onUse: (picked: Record<string, number>) => void; disabled: boolean; alt?: React.ReactNode; sticky?: boolean; empty?: string }) {
   const { money0, symbol } = useMoney();
   const [draft, setDraft] = useState<Record<string, number>>(() => Object.fromEntries(cats.map((c) => [c.id, c.suggested])));
   const set = (id: string, n: number | null) => setDraft((d) => merge(d, { [id]: n }));
-  const rows = Object.keys(draft).map((id) => open.find((c) => c.id === id)).filter((c) => !!c);
+  const rows = Object.keys(draft).map((id) => cats.find((c) => c.id === id) ?? open.find((c) => c.id === id)).filter((c) => !!c);
   const total = Object.values(draft).reduce((s, n) => s + n, 0);
-  if (!cats.length) return <div className="px-6 md:px-8 pb-6 space-y-4"><p className="text-sm text-muted">Nothing to suggest right now.</p>{alt}</div>;
+  if (!cats.length) return <div className="px-6 md:px-8 pb-6 space-y-4"><p className="text-sm text-muted">{empty}</p>{alt}</div>;
   return (
     <>
       <ul className="grid @2xl:grid-cols-2 gap-x-8 px-5 md:px-8">
@@ -575,6 +582,7 @@ function Suggest({ cats, open, income, basis, onUse, disabled, alt, sticky }: { 
           <li key={c.id} className="flex items-center gap-3 py-1.5 border-b border-line">
             <CategoryIcon icon={c.icon} color={c.color} size={30} />
             <span className="flex-1 min-w-0 truncate">{c.label}</span>
+            {current && c.id in current && <span className="text-sm text-muted tabular whitespace-nowrap">{money0(current[c.id])} →</span>}
             <span className="text-sm font-medium"><AmountCell label={c.label} value={draft[c.id]} symbol={symbol} onSave={(n) => set(c.id, n)} onType={(n) => set(c.id, n)} /></span>
             <button onClick={() => set(c.id, null)} aria-label={`Remove ${c.label}`} className="size-8 grid place-items-center rounded-full text-muted hover:text-bad hover:bg-[var(--hover-strong)] shrink-0"><X size={15} /></button>
           </li>
@@ -585,7 +593,7 @@ function Suggest({ cats, open, income, basis, onUse, disabled, alt, sticky }: { 
         <p className="text-xs text-muted">{basis} Never less than you&apos;ve already spent this month.</p>
         {income > 0 && <p className="text-sm text-muted">You bring in about {money0(income)} a month. {income >= total ? `This leaves ${money0(income - total)} to save.` : `You're spending ${money0(total - income)} more than you earn.`}</p>}
         <div className="flex flex-wrap items-center gap-3">
-          <button className="btn-primary" onClick={() => onUse(draft)} disabled={disabled || !rows.length}>Use these · {money0(total)}/mo</button>
+          <button className="btn-primary" onClick={() => onUse(draft)} disabled={disabled || !rows.length}>{current ? `Apply ${rows.length === 1 ? "it" : `all ${rows.length}`}` : `Use these · ${money0(total)}/mo`}</button>
           {alt}
         </div>
       </div>
