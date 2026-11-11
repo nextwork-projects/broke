@@ -91,8 +91,9 @@ export function BudgetEditor({ basis, cats: all, initial, year, range, today, in
     apply({ [c.id]: c.suggested }, c.suggested ? `Added ${c.label} · ${money0(c.suggested)}` : undefined);
   }
 
-  // Fills main categories that have no budget yet; amounts you set stay.
-  const suggestion = cats.filter((c) => c.main && !(c.id in budgets)).sort((a, b) => b.suggested - a.suggested);
+  // The first-time list: every spending category with no budget yet, biggest first, so nothing is hidden and the X
+  // on each row takes off what you don't want. Amounts you set stay.
+  const suggestion = cats.filter((c) => !(c.id in budgets)).sort((a, b) => b.suggested - a.suggested || a.label.localeCompare(b.label));
   // The Suggest sheet: budgets well off from real spending, plus main categories with none yet.
   const retuned = retune(cats, budgets);
   // Saves exactly what the suggestion list shows after any edits.
