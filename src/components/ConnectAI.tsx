@@ -1,3 +1,4 @@
+/* eslint-disable @next/next/no-img-element */ // tiny local SVG marks
 "use client";
 
 import { Check } from "lucide-react";
@@ -9,6 +10,10 @@ import { Dropdown } from "@/components/Dropdown";
 import { OPENROUTER_FREE, type ModelChoice } from "@/lib/llm/models";
 
 const PLANS = ["claude", "codex", "gemini"], HERE = ["local", "opencode"];
+// Brand marks (Simple Icons; ChatGPT from LobeHub icons), on a white tile so dark marks show in dark mode.
+const LOGO: Record<string, string> = { claude: "claude", codex: "chatgpt", gemini: "gemini", local: "ollama", opencode: "opencode", openrouter: "openrouter" };
+const AiLogo = ({ id }: { id: string }) =>
+  LOGO[id] ? <span className="size-9 shrink-0 rounded-xl bg-white grid place-items-center"><img src={`/logos/ai/${LOGO[id]}.svg`} alt="" className="size-5" /></span> : null;
 
 // The one place to connect an AI, easiest first. broke works without any of it: AI is only for asking questions.
 export function ConnectAI({ initial, choice: saved, hosted, connected, failed }: { initial: Provider[]; choice: ModelChoice | null; hosted: boolean; connected: boolean; failed: boolean }) {
@@ -43,9 +48,12 @@ export function ConnectAI({ initial, choice: saved, hosted, connected, failed }:
   const row = (p: Provider) => (
     <li key={p.id} className="border-t border-line py-3 space-y-3">
       <div className="flex items-center justify-between gap-3">
-        <span className="min-w-0">
+        <span className="min-w-0 flex items-center gap-3">
+          <AiLogo id={p.id} />
+          <span className="min-w-0">
           <span className="block font-medium">{p.label}</span>
           {p.found && <span className={`block text-sm ${p.ready ? "text-good" : "text-muted"}`}>{p.found}</span>}
+          </span>
         </span>
         {p.helper && !p.ready ? null : !p.ready ? <button className="btn shrink-0" onClick={() => setSetting(setting === p.id ? null : p.id)}>{p.action ?? "Set up"}</button>
           : choice?.provider === p.id ? <span className="text-sm text-muted flex items-center gap-1.5"><Check size={15} /> In use</span>
@@ -64,7 +72,7 @@ export function ConnectAI({ initial, choice: saved, hosted, connected, failed }:
 
       <section className="card p-6 space-y-4">
         <div className="space-y-1">
-          <h2 className="card-title">OpenRouter</h2>
+          <h2 className="card-title flex items-center gap-3"><AiLogo id="openrouter" />OpenRouter</h2>
           <p className="text-sm text-muted">The easiest way if you don&apos;t have an AI yet. Make a free account, approve broke, and you&apos;re done. No install, no key to copy. Free models cost nothing. Paid ones use credits you add yourself.</p>
         </div>
         {openRouter?.ready ? (
