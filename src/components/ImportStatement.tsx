@@ -132,6 +132,7 @@ export function ImportStatement({ accounts, locale, currency, link = false, trig
       }
       added += data?.length ?? 0;
     }
+    if (added) await fetch("/api/recurring/find", { method: "POST" }).catch(() => null); // repeating charges in what came in
     setBusy(false);
     const dupes = rows.length - added;
     toast(`${added} added${dupes ? `, ${dupes} already there` : ""}`);
