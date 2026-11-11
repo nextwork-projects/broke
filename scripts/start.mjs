@@ -18,7 +18,27 @@ const npm = (...args) => spawnSync("npm", args, { stdio: "inherit", shell: win }
 // npm ci installs exactly what the repo pins and leaves package-lock.json as it is (so `npm run update` stays clean).
 // Checks for next itself, not node_modules: a stopped first install leaves a half-full node_modules.
 const nextBin = join("node_modules", ".bin", win ? "next.cmd" : "next");
-if (!existsSync(nextBin) && !npm("ci") && !npm("install")) process.exit(1);
+
+// Auto-update: each start brings in the newest broke when this copy has no changes of its own (a fast-forward only).
+// Your own changes or commits, no git, no internet, or BROKE_NO_AUTO_UPDATE=1: it starts the copy you have.
+const git = (...args) => spawnSync("git", args, { encoding: "utf8", shell: win });
+let lockChanged = false;
+if (existsSync(".git") && !process.env.BROKE_NO_AUTO_UPDATE) {
+  if (git("status", "--porcelain").stdout.trim() === "M package-lock.json") git("checkout", "--", "package-lock.json"); // npm's rewrite, not yours
+  const clean = git("status", "--porcelain").stdout.trim() === "";
+  const fetched = git("fetch", "--quiet", process.env.BROKE_REPO || "https://github.com/nextwork-projects/broke.git", "main").status === 0;
+  const head = git("rev-parse", "HEAD").stdout.trim(), latest = fetched ? git("rev-parse", "FETCH_HEAD").stdout.trim() : head;
+  if (latest !== head) {
+    const behindOnly = git("merge-base", "--is-ancestor", "HEAD", latest).status === 0;
+    if (clean && behindOnly && git("merge", "--quiet", "--ff-only", latest).status === 0) {
+      lockChanged = git("diff", "--quiet", head, latest, "--", "package-lock.json").status !== 0;
+      console.log("Updated broke to the newest version.");
+    } else if (!git("merge-base", "--is-ancestor", latest, "HEAD").status) {
+      // already has it (your copy is ahead): nothing to say
+    } else console.log("A new version of broke is out. You have your own changes, so run `npm run update` to bring it in.");
+  }
+}
+if ((lockChanged || !existsSync(nextBin)) && !npm("ci") && !npm("install")) process.exit(1);
 
 const env = {};
 for (const f of [".env", ".env.local"]) {
