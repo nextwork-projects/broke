@@ -11,7 +11,7 @@ export function RemoveTest({ items, intro }: { items: { id: string; name: string
   const [busy, setBusy] = useState(false);
   const [left, setLeft] = useState(items);
   const [err, setErr] = useState("");
-  if (!left.length) return <span className="text-sm text-good inline-flex items-center gap-1"><Check size={13} /> Test connections removed.</span>;
+  if (!left.length) return <span className="text-sm text-good inline-flex items-center gap-1"><Check size={13} /> Test data deleted.</span>;
   async function remove() {
     setBusy(true);
     setErr("");
@@ -37,7 +37,7 @@ export function RemoveTest({ items, intro }: { items: { id: string; name: string
           <button className="text-muted hover:text-ink" disabled={busy} onClick={() => setConfirm(false)}>Cancel</button>
         </div>
       ) : (
-        <button className="btn" onClick={() => setConfirm(true)}>Remove test connections</button>
+        <button className="btn" onClick={() => setConfirm(true)}>Delete test data</button>
       )}
       {err && <p className="text-bad">{err}</p>}
     </div>
