@@ -33,6 +33,7 @@ export const ENV_KEYS: Record<string, Spec> = {
   },
   // Never saved: validate() puts it into SUPABASE_DB_URL's [YOUR-PASSWORD], so nobody edits the string by hand.
   SUPABASE_DB_PASSWORD: { label: "Database password", secret: true, check: () => null },
+  BROKE_COUNTRY: { label: "Country", secret: false, check: (v) => (/^[A-Z]{2}$/.test(v) ? null : "A two-letter country code") },
   PLAID_CLIENT_ID: { label: "Client ID", secret: false, check: (v) => (/^[a-f0-9]{24}$/.test(v) ? null : "24 letters and numbers, from Plaid → Developers → Keys") },
   PLAID_SECRET: { label: "Secret", secret: true, check: (v) => (/^[a-f0-9]{30}$/.test(v) ? null : "30 letters and numbers, from Plaid → Developers → Keys") },
   PLAID_ENV: { label: "Mode", secret: false, check: (v) => (/^(sandbox|production)$/.test(v) ? null : "sandbox or production") },

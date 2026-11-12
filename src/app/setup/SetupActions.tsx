@@ -2,6 +2,8 @@
 
 import { Check, Copy, Eye, EyeOff } from "lucide-react";
 import { useEffect, useState } from "react";
+import { Dropdown } from "@/components/Dropdown";
+import { COUNTRIES, countryOf, guessCountry, OTHER } from "@/lib/countries";
 import type { Field } from "@/lib/setup";
 
 export function CopyCommand({ command }: { command: string }) {
@@ -208,3 +210,50 @@ export function ConnectSupabaseButton({ onDone, onFail }: { onDone: () => void; 
   );
 }
 
+
+const COUNTRY_OPTIONS = [...COUNTRIES, OTHER].map((c) => ({ value: c.code, label: c.name }));
+
+// Step 3 asks where they live first, so it can show that country's bank feed. Saved as BROKE_COUNTRY; onboarding uses it
+// instead of asking again. Nothing saved yet: the guess from this computer, with a Continue button.
+export function CountryPick({ saved, canWrite, writeNote, onSaved }: { saved: string; canWrite: boolean; writeNote?: string; onSaved: () => void }) {
+  const [guess, setGuess] = useState("");
+  const [value, setValue] = useState(saved);
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState("");
+  useEffect(() => {
+    if (saved) return; // the checklist remounts this (key) when the saved country changes
+    const g = guessCountry(navigator.languages ?? [navigator.language], Intl.DateTimeFormat().resolvedOptions().timeZone);
+    setGuess(g);
+    setValue((v) => v || g);
+  }, [saved]);
+
+  async function save(code: string) {
+    setBusy(true);
+    setErr("");
+    try {
+      const res = await fetch("/api/setup/env", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ values: { BROKE_COUNTRY: code } }) });
+      const body = (await res.json().catch(() => ({}))) as { error?: string; errors?: Record<string, string> };
+      if (res.ok) onSaved();
+      else setErr(body.errors?.BROKE_COUNTRY ?? body.error ?? "Couldn't save.");
+    } catch {
+      setErr("Couldn't reach broke. Is it still running?");
+    }
+    setBusy(false);
+  }
+
+  if (!canWrite) return <p className="text-sm text-muted">Where you live: {saved ? countryOf(saved).name : "not set"}. {writeNote} Set BROKE_COUNTRY there.</p>;
+  return (
+    <div className="space-y-2">
+      <span className="block text-sm font-medium">Where do you live?</span>
+      <div className="flex flex-wrap items-center gap-3">
+        <div className="w-64 max-w-full">
+          <Dropdown label="Country" value={value} options={COUNTRY_OPTIONS} onChange={(c) => { setValue(c); if (saved) save(c); }} placeholder="Choose a country" searchable />
+        </div>
+        {!saved && <button className="btn-primary" disabled={busy || !value} onClick={() => save(value)}>{busy ? "Saving..." : "Continue"}</button>}
+        {saved && busy && <span className="text-sm text-muted">Saving...</span>}
+      </div>
+      {!saved && value && value === guess && <p className="text-xs text-muted">Guessed from this computer&apos;s time zone and language. Change it if that&apos;s wrong.</p>}
+      {err && <p className="text-sm text-bad">{err}</p>}
+    </div>
+  );
+}

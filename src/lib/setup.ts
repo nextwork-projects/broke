@@ -9,6 +9,7 @@ import { mcpConnected } from "@/lib/supabase-mcp";
 import { cardReferralSection } from "@/lib/cards-data";
 import { akahuTokens } from "@/lib/providers";
 import { akahuGet } from "@/lib/providers/akahu";
+import { countryOf } from "@/lib/countries";
 
 export type StepStatus = "done" | "todo" | "error" | "optional";
 export type Part = string | { href: string; label: string };
@@ -27,6 +28,7 @@ export type Section = {
   command?: string;
   action?: "migrate" | "connect";
   providers?: AiRow[];
+  country?: string; // step 3 only: the saved BROKE_COUNTRY, "" when not picked yet
 };
 export type SetupStatus = { sections: Section[]; ready: boolean; canWrite: boolean; writeNote?: string };
 
@@ -142,10 +144,10 @@ export async function setupStatus(signedIn: boolean): Promise<SetupStatus> {
   }
 
   const plaidSection: Section = {
-    id: "plaid", kind: "required",
-    title: "Connect banks",
+    id: "plaid", kind: "more",
+    title: "US and Canadian banks (Plaid)",
     what: "Start with Plaid's test banks: free, with made-up money. Switch to your real banks whenever you like.",
-    status: bank?.ok ? "done" : bank ? "error" : "todo",
+    status: bank?.ok ? "done" : bank ? "error" : "optional",
     note: bank?.message,
     steps: [
       ["Make a free account at ", { href: "https://dashboard.plaid.com/signup", label: "plaid.com" }, ", then open ", { href: "https://dashboard.plaid.com/developers/keys", label: "Developers → Keys" }, "."],
@@ -153,6 +155,62 @@ export async function setupStatus(signedIn: boolean): Promise<SetupStatus> {
     ],
     fields: fields(env, ["PLAID_CLIENT_ID", "PLAID_SECRET", "PLAID_ENV"], { PLAID_ENV: { options: ["sandbox", "production"] } }),
   };
+
+  const akahuSection: Section = {
+    id: "akahu", kind: "more",
+    title: "New Zealand banks (Akahu)",
+    what: "Akahu reads NZ bank accounts. A free personal app covers the banks on your own Akahu login.",
+    status: akahu?.ok ? "done" : akahu ? "error" : "optional",
+    note: akahu?.message,
+    steps: [
+      ["Sign up at ", { href: "https://my.akahu.nz", label: "my.akahu.nz" }, " and connect your banks."],
+      ["Open Developers there, create a personal app and copy both tokens."],
+    ],
+    fields: fields(env, ["AKAHU_APP_TOKEN", "AKAHU_USER_TOKEN"], { AKAHU_APP_TOKEN: { placeholder: "app_token_…" }, AKAHU_USER_TOKEN: { placeholder: "user_token_…" } }),
+  };
+  const enableSection: Section = {
+    id: "enablebanking", kind: "more",
+    title: "UK and European banks (Enable Banking)",
+    what: "People pick their bank and approve on the bank's own page. Restricted mode covers accounts you link yourself. Other people's accounts need a contract with Enable Banking.",
+    status: isSet(env.ENABLE_BANKING_APP_ID) && isSet(env.ENABLE_BANKING_PRIVATE_KEY) ? "done" : "optional",
+    steps: [
+      ["Sign up at ", { href: "https://enablebanking.com/sign-in/", label: "enablebanking.com" }, " and register an application."],
+      [`Add this as the application's redirect URL: http://localhost:3000/api/bank/connect/enablebanking/callback`],
+      ["Copy the application ID and paste its private key below."],
+    ],
+    fields: fields(env, ["ENABLE_BANKING_APP_ID", "ENABLE_BANKING_PRIVATE_KEY"]),
+  };
+  const basiqSection: Section = {
+    id: "basiq", kind: "more",
+    title: "Australian banks (Basiq)",
+    what: "People approve on Basiq's own page. The sandbox is free with test banks. Real banks may need accreditation or a partner under Australia's Consumer Data Right, so ask Basiq.",
+    status: isSet(env.BASIQ_API_KEY) ? "done" : "optional",
+    steps: [
+      ["Create an API key at ", { href: "https://dashboard.basiq.io", label: "dashboard.basiq.io" }, "."],
+      [`In Basiq's dashboard, set the return address to http://localhost:3000/api/bank/connect/basiq/callback`],
+    ],
+    fields: fields(env, ["BASIQ_API_KEY"]),
+  };
+  const belvoSection: Section = {
+    id: "belvo", kind: "more",
+    title: "Brazilian banks (Belvo)",
+    what: "Open Finance consent on Belvo's page. People enter their CPF and name first, as Brazil requires. Belvo requires a link to your terms. Production keys come from Belvo support.",
+    status: isSet(env.BELVO_SECRET_ID) && isSet(env.BELVO_SECRET_PASSWORD) && isSet(env.BELVO_TERMS_URL) ? "done" : "optional",
+    steps: [["Sign up at ", { href: "https://developers.belvo.com", label: "belvo.com" }, " and create sandbox keys under Developer Tools, API Keys."]],
+    fields: fields(env, ["BELVO_SECRET_ID", "BELVO_SECRET_PASSWORD", "BELVO_TERMS_URL", "BELVO_ENV"]),
+  };
+
+  // Step 3 is the bank feed for where they live (BROKE_COUNTRY, asked on this step). No feed there: import a statement.
+  // Installs from before the country question keep a working feed as step 3.
+  const saved = isSet(env.BROKE_COUNTRY) ? env.BROKE_COUNTRY! : "";
+  const home = saved ? countryOf(saved) : bank?.ok ? countryOf("US") : akahu?.ok ? countryOf("NZ") : null;
+  const feeds = [plaidSection, akahuSection, enableSection, basiqSection, belvoSection];
+  const homeFeed = feeds.find((f) => f.id === home?.providers[0]);
+  const bankStep: Section = !home
+    ? { id: "country", kind: "required", title: "Connect banks", what: "Pick where you live. broke shows the banks you can link there.", status: "todo", country: "" }
+    : homeFeed
+      ? { ...homeFeed, kind: "required", title: "Connect banks", what: homeFeed === plaidSection ? homeFeed.what : `${homeFeed.title}. ${homeFeed.what}`, status: homeFeed.status === "optional" ? "todo" : homeFeed.status, country: saved }
+      : { id: "country", kind: "required", title: "Connect banks", what: `No bank feed for ${home.name} yet. After you sign in, import a statement from your bank.`, status: "done", country: saved };
 
   const aiSection: Section = {
     id: "ai", kind: "ai",
@@ -205,49 +263,7 @@ export async function setupStatus(signedIn: boolean): Promise<SetupStatus> {
           command: `claude mcp add --transport http supabase-broke "https://mcp.supabase.com/mcp?project_ref=${ref}"`,
         }]
       : []),
-    {
-      id: "akahu", kind: "more",
-      title: "New Zealand banks (Akahu)",
-      what: "Akahu reads NZ bank accounts. A free personal app covers the banks on your own Akahu login.",
-      status: akahu?.ok ? "done" : akahu ? "error" : "optional",
-      note: akahu?.message,
-      steps: [
-        ["Sign up at ", { href: "https://my.akahu.nz", label: "my.akahu.nz" }, " and connect your banks."],
-        ["Open Developers there, create a personal app and copy both tokens."],
-      ],
-      fields: fields(env, ["AKAHU_APP_TOKEN", "AKAHU_USER_TOKEN"], { AKAHU_APP_TOKEN: { placeholder: "app_token_…" }, AKAHU_USER_TOKEN: { placeholder: "user_token_…" } }),
-    },
-    {
-      id: "enablebanking", kind: "more",
-      title: "UK and European banks (Enable Banking)",
-      what: "People pick their bank and approve on the bank's own page. Restricted mode covers accounts you link yourself. Other people's accounts need a contract with Enable Banking.",
-      status: isSet(env.ENABLE_BANKING_APP_ID) && isSet(env.ENABLE_BANKING_PRIVATE_KEY) ? "done" : "optional",
-      steps: [
-        ["Sign up at ", { href: "https://enablebanking.com/sign-in/", label: "enablebanking.com" }, " and register an application."],
-        [`Add this as the application's redirect URL: http://localhost:3000/api/bank/connect/enablebanking/callback`],
-        ["Copy the application ID and paste its private key below."],
-      ],
-      fields: fields(env, ["ENABLE_BANKING_APP_ID", "ENABLE_BANKING_PRIVATE_KEY"]),
-    },
-    {
-      id: "basiq", kind: "more",
-      title: "Australian banks (Basiq)",
-      what: "People approve on Basiq's own page. The sandbox is free with test banks. Real banks may need accreditation or a partner under Australia's Consumer Data Right, so ask Basiq.",
-      status: isSet(env.BASIQ_API_KEY) ? "done" : "optional",
-      steps: [
-        ["Create an API key at ", { href: "https://dashboard.basiq.io", label: "dashboard.basiq.io" }, "."],
-        [`In Basiq's dashboard, set the return address to http://localhost:3000/api/bank/connect/basiq/callback`],
-      ],
-      fields: fields(env, ["BASIQ_API_KEY"]),
-    },
-    {
-      id: "belvo", kind: "more",
-      title: "Brazilian banks (Belvo)",
-      what: "Open Finance consent on Belvo's page. People enter their CPF and name first, as Brazil requires. Belvo requires a link to your terms. Production keys come from Belvo support.",
-      status: isSet(env.BELVO_SECRET_ID) && isSet(env.BELVO_SECRET_PASSWORD) && isSet(env.BELVO_TERMS_URL) ? "done" : "optional",
-      steps: [["Sign up at ", { href: "https://developers.belvo.com", label: "belvo.com" }, " and create sandbox keys under Developer Tools, API Keys."]],
-      fields: fields(env, ["BELVO_SECRET_ID", "BELVO_SECRET_PASSWORD", "BELVO_TERMS_URL", "BELVO_ENV"]),
-    },
+    ...feeds.filter((f) => f !== homeFeed),
     {
       id: "devlogin", kind: "more",
       title: "Skip sign-in while testing",
@@ -258,7 +274,7 @@ export async function setupStatus(signedIn: boolean): Promise<SetupStatus> {
     cardReferralSection(),
   ];
 
-  const required = [supabase, database, plaidSection];
+  const required = [supabase, database, bankStep];
   const gate = writeAllowedBasics();
   return { sections: [...required, aiSection, ...more], ready: required.every((s) => s.status === "done"), canWrite: gate.ok, writeNote: gate.reason };
 }

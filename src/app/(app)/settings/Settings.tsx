@@ -78,7 +78,7 @@ export function Settings({ signedIn, local, folder, repo, update, email, profile
   }, [group, local, load]);
 
   const nav = local ? NAV : NAV.filter((n) => !SERVER.includes(n.id) || n.id === "banks" || n.id === "database");
-  const sections = (data?.sections ?? []).filter((s) => groupOf(s) === group);
+  const sections = (data?.sections ?? []).filter((s) => s.id !== "country" && groupOf(s) === group); // "country": setup's step 3 with no feed; the country itself is under Profile
   const flagged = (g: Group) => (data?.sections ?? []).some((s) => groupOf(s) === g && attention(s));
   const here = NAV.find((n) => n.id === group)!;
   const pick = (g: Group) => {
