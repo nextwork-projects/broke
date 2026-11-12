@@ -1,3 +1,4 @@
+import { saveFoundRecurring } from "@/lib/recurring-save";
 import { NextResponse } from "next/server";
 import { plaidError } from "@/lib/plaid";
 import { ITEM_COLS, syncItem } from "@/lib/sync";
@@ -34,5 +35,7 @@ export async function POST() {
       results.push({ id: item.id, added: 0, modified: 0, removed: 0, error: err.code });
     }
   }
+  // broke's own recurring finder, over every account (Plaid's misses, feeds, imported statements).
+  await saveFoundRecurring(user.id).catch((e) => console.error("[broke] recurring:", e instanceof Error ? e.message : e));
   return NextResponse.json({ ok: true, results });
 }

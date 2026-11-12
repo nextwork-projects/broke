@@ -23,6 +23,16 @@ export function monthList(months: string[]) {
 // "Use these" never puts the user over budget on day one.
 export const suggest = (avg: number, spentThisMonth: number) => roundUp(Math.max(avg, spentThisMonth));
 
+// A budget is "well off" when it is $25 and a fifth or more away from the suggested amount. Small gaps are noise.
+export const wellOff = (budget: number, suggested: number) => suggested > 0 && Math.abs(budget - suggested) >= Math.max(25, budget * 0.2);
+
+// What the Suggest sheet offers: budgets well off from real spending (biggest gap first), then main categories with no budget.
+export function retune<C extends { id: string; suggested: number; main: boolean }>(cats: C[], budgets: Record<string, number>): C[] {
+  const off = cats.filter((c) => c.id in budgets && wellOff(budgets[c.id], c.suggested)).sort((a, b) => Math.abs(b.suggested - budgets[b.id]) - Math.abs(a.suggested - budgets[a.id]));
+  const fresh = cats.filter((c) => c.main && !(c.id in budgets)).sort((a, b) => b.suggested - a.suggested);
+  return [...off, ...fresh];
+}
+
 // Where the month is: today counts as a day left.
 export function month(now: Date) {
   const day = now.getUTCDate();

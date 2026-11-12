@@ -211,6 +211,7 @@ export function AddAccounts({ choices, accounts, locale, currency, country }: { 
       {choices.feeds.map((f) => <FeedConnect key={f} id={f} country={country} />)}
       <div className="grid grid-cols-1 @xl:grid-cols-2 gap-4">
         {choices.bank === "plaid" && <PlaidCard link={link} />}
+        {choices.plaidMissing && <Card icons={[BankIcon, CreditCardIcon, WalletIcon]} title="Link a bank or card" body="Add your free Plaid keys in Setup first. It takes about 2 minutes." onClick={() => window.location.assign("/setup")} />}
         {(choices.bank === "akahu" || choices.alsoAkahu) && <AkahuCard />}
         {choices.investments && <InvestCard link={link} />}
         <ImportStatement accounts={accounts} locale={locale} currency={currency} trigger={(open) => (

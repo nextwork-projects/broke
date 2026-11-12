@@ -1,6 +1,6 @@
 // Run: node src/lib/budget.test.ts
 import assert from "node:assert/strict";
-import { budgetChanges, daysBetween, scaleBudget, startPeriod, yearView, merge, month, perDay, roundUp, step, suggest, tone } from "./budget.ts";
+import { budgetChanges, retune, wellOff, daysBetween, scaleBudget, startPeriod, yearView, merge, month, perDay, roundUp, step, suggest, tone } from "./budget.ts";
 
 assert.equal(roundUp(0), 0);
 assert.equal(roundUp(42.1), 50);
@@ -68,3 +68,16 @@ assert.equal(med([100, 200]), 150);
 assert.equal(med([]), 0);
 assert.equal(ml(["2026-10", "2026-08", "2026-09"]), "August, September and October");
 assert.equal(ml(["2026-10"]), "October");
+
+assert.equal(wellOff(650, 350), true);
+assert.equal(wellOff(100, 110), false); // $10 gap
+assert.equal(wellOff(1600, 1650), false); // $50 is under a fifth
+assert.equal(wellOff(100, 0), false); // nothing spent: leave it
+{
+  const cats = [
+    { id: "a", suggested: 350, main: true }, { id: "b", suggested: 300, main: true }, { id: "c", suggested: 100, main: true },
+    { id: "d", suggested: 80, main: true }, { id: "e", suggested: 200, main: true }, { id: "f", suggested: 5, main: false },
+  ];
+  assert.deepEqual(retune(cats, { a: 650, b: 100, c: 105 }).map((c) => c.id), ["a", "b", "e", "d"]);
+  assert.deepEqual(retune(cats, { a: 350, b: 300, c: 100, d: 80, e: 200 }), []);
+}

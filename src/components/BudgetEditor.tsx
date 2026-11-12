@@ -13,7 +13,7 @@ import { PageDates } from "@/components/PageDates";
 import { CATEGORY_ICON_KEYS, CategoryIcon } from "@/components/Icons";
 import { CountUp, EASE, firstVisit, reduced } from "@/components/motion";
 import { toast } from "@/components/Toast";
-import { budgetContext, daysBetween, merge, month, perDay, scaleBudget, startPeriod, step, tone, yearView, type MonthSpend } from "@/lib/budget";
+import { budgetContext, daysBetween, merge, month, perDay, retune, scaleBudget, startPeriod, step, tone, yearView, type MonthSpend } from "@/lib/budget";
 import { useMoney } from "@/components/Money";
 
 export type BudgetRange = { from: string; to: string; start: string; end: string; spent: Record<string, number> };
@@ -91,11 +91,16 @@ export function BudgetEditor({ basis, cats: all, initial, year, range, today, in
     apply({ [c.id]: c.suggested }, c.suggested ? `Added ${c.label} · ${money0(c.suggested)}` : undefined);
   }
 
-  // Fills main categories that have no budget yet; amounts you set stay.
-  const suggestion = cats.filter((c) => c.main && !(c.id in budgets)).sort((a, b) => b.suggested - a.suggested);
-  const useSuggested = () => {
+  // The first-time list: every spending category with no budget yet, biggest first, so nothing is hidden and the X
+  // on each row takes off what you don't want. Amounts you set stay.
+  const suggestion = cats.filter((c) => !(c.id in budgets)).sort((a, b) => b.suggested - a.suggested || a.label.localeCompare(b.label));
+  // The Suggest sheet: budgets well off from real spending, plus main categories with none yet.
+  const retuned = retune(cats, budgets);
+  // Saves exactly what the suggestion list shows after any edits.
+  const saveSuggested = (picked: Record<string, number>, verb = "Added") => {
     setSheet(null);
-    apply(Object.fromEntries(suggestion.map((c) => [c.id, c.suggested])), `Added ${suggestion.length} budgets`);
+    const n = Object.keys(picked).length;
+    apply(picked, `${verb} ${n} ${n === 1 ? "budget" : "budgets"}`);
   };
 
   const sheets = (
@@ -122,7 +127,10 @@ export function BudgetEditor({ basis, cats: all, initial, year, range, today, in
         <NewCategory taken={cats.map((c) => c.label)} onDone={(id, label, amount) => { setSheet(null); setBudgets((x) => ({ ...x, [id]: amount })); setFresh(id); toast(`Added ${label}`); }} />
       </Sheet>
       <Sheet open={sheet === "suggest"} onClose={() => setSheet(null)} title="Suggested budgets">
-        <Suggest cats={suggestion} income={0} basis={basis} onUse={useSuggested} disabled={error === SETUP} sticky />
+        {/* Each open starts from the latest numbers. The AI button closes the sheet so the assistant isn't behind it. */}
+        <Suggest key={`${sheet}${retuned.map((c) => c.id).join()}`} cats={retuned} open={open} current={budgets} income={0} basis={basis} onUse={(p) => saveSuggested(p, "Updated")} disabled={error === SETUP} sticky
+          empty="Your budgets are close to what you really spend."
+          alt={aside && <div className="basis-full" onClickCapture={() => setSheet(null)}>{aside}</div>} />
       </Sheet>
     </>
   );
@@ -133,9 +141,9 @@ export function BudgetEditor({ basis, cats: all, initial, year, range, today, in
       <div className="card overflow-hidden">
         <div className="p-6 md:p-8 pb-4 md:pb-4 max-w-xl space-y-2">
           <h2 className="text-2xl font-semibold">Set a budget from how you really spend</h2>
-          <p className="text-sm text-muted">{basis} Use them as they are, or change any one after.</p>
+          <p className="text-sm text-muted">{basis} Press an amount to change it. Remove any you don&apos;t want, or add another.</p>
         </div>
-        <Suggest cats={suggestion} income={income} basis={basis} onUse={useSuggested} disabled={error === SETUP} alt={<button className="btn" onClick={() => setSheet("add")}>Add one at a time</button>} />
+        <Suggest cats={suggestion} open={open} income={income} basis={basis} onUse={saveSuggested} disabled={error === SETUP} alt={<button className="btn" onClick={() => setSheet("add")}>Add one at a time</button>} />
         {error && <div className="px-6 md:px-8 pb-6"><ErrorNote error={error} /></div>}
         {sheets}
       </div>
@@ -355,16 +363,6 @@ function BudgetTable({ cats, open, budgets, total, spent, past, apply, onAdd }: 
   cats: BudgetCat[]; open: BudgetCat[]; budgets: Record<string, number>; total: number; spent: number; past: boolean; apply: (c: Changes, done?: string) => void; onAdd: (c: BudgetCat, n: number) => void;
 }) {
   const { money0, symbol } = useMoney();
-  const [pick, setPick] = useState("");
-  const [amount, setAmount] = useState("");
-  const chosen = open.find((c) => c.id === pick);
-  const n = Math.round(Number(amount));
-  const add = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!chosen || !amount.trim() || !(n >= 0)) return;
-    onAdd(chosen, n);
-    setPick(""); setAmount("");
-  };
   const num = "px-3 py-2.5 text-right tabular whitespace-nowrap";
   const extra = "hidden @2xl:table-cell";
   const wide = "hidden @lg:table-cell"; // phones keep Budget and Left
@@ -416,24 +414,41 @@ function BudgetTable({ cats, open, budgets, total, spent, past, apply, onAdd }: 
           </tr>
         </tfoot>
       </table>
-      {!!open.length && (
-        <form onSubmit={add} className="flex flex-wrap items-center gap-2 px-5 py-3">
-          <div className="basis-full @lg:basis-0 flex-1 min-w-0">
-            <Dropdown label="Category to add" value={pick} placeholder="Add a category" searchable options={open.map((c) => ({ value: c.id, label: c.label }))}
-              onChange={(id) => { setPick(id); setAmount(String(open.find((c) => c.id === id)?.suggested || "")); }} />
-          </div>
-          <label className="flex items-center border border-line rounded-xl px-3 h-10 bg-surface focus-within:border-ink w-28 shrink-0">
-            <span className="text-sm text-muted">{symbol}</span>
-            <input inputMode="numeric" value={amount} onChange={(e) => setAmount(e.target.value.replace(/[^\d.]/g, ""))} placeholder="0" aria-label="Monthly budget" className="w-full ml-1 text-sm tabular outline-none bg-transparent" />
-          </label>
-          <button disabled={!chosen || !amount.trim()} className="btn shrink-0 inline-flex items-center gap-1.5"><Plus size={15} /> Add</button>
-        </form>
-      )}
+      <AddBudget open={open} onAdd={onAdd} className="px-5 py-3" />
     </section>
   );
 }
 
-function AmountCell({ label, value, symbol, onSave }: { label: string; value: number; symbol: string; onSave: (n: number) => void }) {
+// Pick a category, type an amount, Add. Picking fills in the suggested amount.
+function AddBudget({ open, onAdd, className }: { open: BudgetCat[]; onAdd: (c: BudgetCat, n: number) => void; className: string }) {
+  const { symbol } = useMoney();
+  const [pick, setPick] = useState("");
+  const [amount, setAmount] = useState("");
+  const chosen = open.find((c) => c.id === pick);
+  const n = Math.round(Number(amount));
+  const add = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!chosen || !amount.trim() || !(n >= 0)) return;
+    onAdd(chosen, n);
+    setPick(""); setAmount("");
+  };
+  if (!open.length) return null;
+  return (
+    <form onSubmit={add} className={`flex flex-wrap items-center gap-2 ${className}`}>
+      <div className="basis-full @lg:basis-0 flex-1 min-w-0">
+        <Dropdown label="Category to add" value={pick} placeholder="Add a category" searchable options={open.map((c) => ({ value: c.id, label: c.label }))}
+          onChange={(id) => { setPick(id); setAmount(String(open.find((c) => c.id === id)?.suggested || "")); }} />
+      </div>
+      <label className="flex items-center border border-line rounded-xl px-3 h-10 bg-surface focus-within:border-ink w-28 shrink-0">
+        <span className="text-sm text-muted">{symbol}</span>
+        <input inputMode="numeric" value={amount} onChange={(e) => setAmount(e.target.value.replace(/[^\d.]/g, ""))} placeholder="0" aria-label="Monthly budget" className="w-full ml-1 text-sm tabular outline-none bg-transparent" />
+      </label>
+      <button disabled={!chosen || !amount.trim()} className="btn shrink-0 inline-flex items-center gap-1.5"><Plus size={15} /> Add</button>
+    </form>
+  );
+}
+
+function AmountCell({ label, value, symbol, onSave, onType }: { label: string; value: number; symbol: string; onSave: (n: number) => void; onType?: (n: number) => void }) {
   const [v, setV] = useState(String(value));
   const commit = () => {
     const n = Math.round(Number(v));
@@ -443,12 +458,16 @@ function AmountCell({ label, value, symbol, onSave }: { label: string; value: nu
   return (
     <label className="inline-flex items-center justify-end gap-0.5 rounded-lg border border-transparent hover:border-line focus-within:border-ink px-1.5 h-8">
       <span className="text-muted">{symbol}</span>
-      <input inputMode="numeric" value={v} aria-label={`${label} budget`} onFocus={(e) => e.target.select()} onChange={(e) => setV(e.target.value.replace(/[^\d.]/g, ""))} onBlur={commit}
+      <input inputMode="numeric" value={v} aria-label={`${label} budget`} onFocus={(e) => e.target.select()} onChange={(e) => {
+          const t = e.target.value.replace(/[^\d.]/g, ""), n = Math.round(Number(t));
+          setV(t);
+          if (onType && t.trim() && Number.isFinite(n)) onType(n);
+        }} onBlur={commit}
         onKeyDown={(e) => {
           if (e.key === "Enter") e.currentTarget.blur();
           if (e.key === "Escape") { setV(String(value)); requestAnimationFrame(() => (document.activeElement as HTMLElement)?.blur()); }
         }}
-        style={{ width: `${Math.max(v.length, 2) + 1}ch` }} className="text-right tabular outline-none bg-transparent" />
+        style={{ width: `${Math.max(v.length, 1) + 0.3}ch` }} className="text-right tabular outline-none bg-transparent" />
     </label>
   );
 }
@@ -547,29 +566,35 @@ function Editor({ label, value, onSave, onCancel, onDelete }: { label: string; v
   );
 }
 
-// Preview of the suggested budgets: the usual month per category.
-function Suggest({ cats, income, basis, onUse, disabled, alt, sticky }: { cats: BudgetCat[]; income: number; basis: string; onUse: () => void; disabled: boolean; alt?: React.ReactNode; sticky?: boolean }) {
-  const { money0 } = useMoney();
-  const total = cats.reduce((s, c) => s + c.suggested, 0);
-  if (!cats.length) return <div className="px-6 md:px-8 pb-6 space-y-4"><p className="text-sm text-muted">Nothing to suggest right now.</p>{alt}</div>;
+// The suggested budgets, the usual month per category, as a draft: change an amount, remove a row or add a category
+// before saving. Nothing saves until Use these, which saves exactly the rows shown.
+// With `current` (budgets you already have), a row with a budget shows the change: $650 → $350.
+function Suggest({ cats, open, current, income, basis, onUse, disabled, alt, sticky, empty = "Nothing to suggest right now." }: { cats: BudgetCat[]; open: BudgetCat[]; current?: Record<string, number>; income: number; basis: string; onUse: (picked: Record<string, number>) => void; disabled: boolean; alt?: React.ReactNode; sticky?: boolean; empty?: string }) {
+  const { money0, symbol } = useMoney();
+  const [draft, setDraft] = useState<Record<string, number>>(() => Object.fromEntries(cats.map((c) => [c.id, c.suggested])));
+  const set = (id: string, n: number | null) => setDraft((d) => merge(d, { [id]: n }));
+  const rows = Object.keys(draft).map((id) => cats.find((c) => c.id === id) ?? open.find((c) => c.id === id)).filter((c) => !!c);
+  const total = Object.values(draft).reduce((s, n) => s + n, 0);
+  if (!cats.length) return <div className="px-6 md:px-8 pb-6 space-y-4"><p className="text-sm text-muted">{empty}</p>{alt}</div>;
   return (
     <>
       <ul className="grid @2xl:grid-cols-2 gap-x-8 px-5 md:px-8">
-        {cats.map((c) => (
-          <li key={c.id} className="flex items-center gap-3 py-2.5 border-b border-line">
+        {rows.map((c) => (
+          <li key={c.id} className="flex items-center gap-3 py-1.5 border-b border-line">
             <CategoryIcon icon={c.icon} color={c.color} size={30} />
             <span className="flex-1 min-w-0 truncate">{c.label}</span>
-            <span className="tabular text-sm">
-              <span className="font-medium">{money0(c.suggested)}</span>
-            </span>
+            {current && c.id in current && <span className="text-sm text-muted tabular whitespace-nowrap">{money0(current[c.id])} →</span>}
+            <span className="text-sm font-medium"><AmountCell label={c.label} value={draft[c.id]} symbol={symbol} onSave={(n) => set(c.id, n)} onType={(n) => set(c.id, n)} /></span>
+            <button onClick={() => set(c.id, null)} aria-label={`Remove ${c.label}`} className="size-8 grid place-items-center rounded-full text-muted hover:text-bad hover:bg-[var(--hover-strong)] shrink-0"><X size={15} /></button>
           </li>
         ))}
       </ul>
+      <AddBudget open={open.filter((c) => !(c.id in draft))} onAdd={(c, n) => set(c.id, n)} className="px-5 md:px-8 pt-3" />
       <div className={`${sticky ? "sticky bottom-0" : ""} bg-surface px-5 md:px-8 py-5 space-y-3`}>
         <p className="text-xs text-muted">{basis} Never less than you&apos;ve already spent this month.</p>
         {income > 0 && <p className="text-sm text-muted">You bring in about {money0(income)} a month. {income >= total ? `This leaves ${money0(income - total)} to save.` : `You're spending ${money0(total - income)} more than you earn.`}</p>}
         <div className="flex flex-wrap items-center gap-3">
-          <button className="btn-primary" onClick={onUse} disabled={disabled}>Use these · {money0(total)}/mo</button>
+          <button className="btn-primary" onClick={() => onUse(draft)} disabled={disabled || !rows.length}>{current ? `Apply ${rows.length === 1 ? "it" : `all ${rows.length}`}` : `Use these · ${money0(total)}/mo`}</button>
           {alt}
         </div>
       </div>

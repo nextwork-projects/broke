@@ -38,6 +38,8 @@ export function addChoices(country?: string | null, alsoNz = false) {
     sandbox: plaid && process.env.PLAID_ENV === "sandbox",
     // No Plaid keys at all: a made-up bank instead (api/demo-bank), so broke can be tried with only a database.
     demo: !configured("plaid"),
+    // The country has Plaid banks but this copy has no Plaid keys yet: offer the bank card anyway, pointing at Setup.
+    plaidMissing: countryOf(code).providers.includes("plaid") && !configured("plaid"),
     // NZ without Akahu keys: say where to add them.
     akahuMissing: (countryOf(code).providers.includes("akahu") || alsoNz) && !configured("akahu"),
     // Lives elsewhere but also banks in NZ (Settings, money profile): the NZ option beside their own.

@@ -1,6 +1,6 @@
-import Link from "next/link";
 import { Merchant } from "@/components/Merchant";
 import { RemoveCopy } from "@/components/PlaidButtons";
+import { RemoveTest } from "@/components/ClearTestData";
 import { duplicateItems } from "@/lib/links";
 import { fmtFor, fmtWith } from "@/lib/format";
 import { historyPending } from "@/lib/sync";
@@ -76,7 +76,9 @@ export async function LinkedNow({ userId, profile }: { userId: string; profile?:
         )}
       </ul>
       {conns.some((c) => c.test) && (
-        <p className="px-5 py-3.5 border-t border-line text-sm">Test banks count in your totals. <Link href="/settings#banks" className="underline underline-offset-2">Delete test data</Link></p>
+        <div className="px-5 py-3.5 border-t border-line">
+          <RemoveTest items={conns.filter((c) => c.test).map((c) => ({ id: c.id, name: c.name }))} intro="Test banks count in your totals." />
+        </div>
       )}
     </section>
   );
