@@ -1,7 +1,7 @@
 "use client";
 /* eslint-disable @next/next/no-img-element */ // attached images are data URLs; next/image has nothing to optimise
 
-import { ArrowUp, Check, LoaderCircle, Paperclip, Plus, Receipt, Repeat, Target, TrendingUp, Wallet, X } from "lucide-react";
+import { ArrowUp, Check, ChevronRight, LoaderCircle, Paperclip, Plus, Receipt, Repeat, Target, TrendingUp, Wallet, X } from "lucide-react";
 import Link from "next/link";
 import { PhoneMark } from "@/components/Logo";
 import { Dropdown } from "@/components/Dropdown";
@@ -10,10 +10,14 @@ import { createContext, useContext, useEffect, useRef, useState } from "react";
 import { decode, encode, isSmall, QUALITY_NOTE, type ModelChoice, type ModelOption } from "@/lib/llm/models";
 import { createClient, updateMeta } from "@/utils/supabase/client";
 import { BudgetOffer } from "@/components/BudgetOffer";
+import { CategoryIcon } from "@/components/Icons";
+import { Merchant } from "@/components/Merchant";
+import { useMoney } from "@/components/Money";
 import { RuleOffer } from "@/components/RuleOffer";
 import { validSave, type GoalPlan } from "@/lib/advice";
 import { BUDGET_CONTEXT } from "@/lib/budget";
 import { useRouter } from "next/navigation";
+import { replyBlocks, type Action, type Breakdown } from "@/lib/reply";
 
 type Msg = { role: "user" | "assistant"; content: string; images?: string[] }; // images: data URLs the user attached
 type Ctx = { open: boolean; toggle: () => void; ask: (q: string) => void };
@@ -579,28 +583,6 @@ function inline(text: string): React.ReactNode[] {
   return out;
 }
 
-// The model ends a reply with ```ask {"q", "options"}``` to ask a question as buttons, and ```save {...}``` to offer
-// a profile change. A block still streaming in is hidden until it closes. Returns the text without the blocks.
-export function replyBlocks(text: string) {
-  let ask: { q: string; options: string[] } | null = null;
-  let save: Record<string, unknown> | null = null;
-  let budget: Record<string, unknown> | null = null;
-  let rules: unknown[] | null = null;
-  const body = text
-    .replace(/```(ask|save|budget|rules)\s*\n([\s\S]*?)```/g, (_, kind: string, json: string) => {
-      try {
-        const v = JSON.parse(json);
-        if (kind === "ask" && typeof v?.q === "string" && Array.isArray(v.options)) ask = { q: v.q, options: v.options.filter((o: unknown) => typeof o === "string").slice(0, 5) };
-        if (kind === "save" && v && typeof v === "object") save = v;
-        if (kind === "rules" && Array.isArray(v)) rules = v;
-        if (kind === "budget" && v && typeof v === "object" && !Array.isArray(v)) budget = v;
-      } catch {}
-      return "";
-    })
-    .replace(/```(ask|save|budget|rules)[\s\S]*$/, "");
-  return { body, ask: ask as { q: string; options: string[] } | null, save: save as Record<string, unknown> | null, budget: budget as Record<string, unknown> | null, rules: rules as unknown[] | null };
-}
-
 // Saves only what this country's profile questions allow (validSave), merged into the existing profile.
 function SaveOffer({ proposed }: { proposed: Record<string, unknown> }) {
   const router = useRouter();
@@ -625,9 +607,80 @@ function SaveOffer({ proposed }: { proposed: Record<string, unknown> }) {
   );
 }
 
+// The user's categories, read once per page: a breakdown row named after one gets its icon and colour.
+type Cat = { label: string; icon: string | null; color: string | null };
+let catsP: Promise<Cat[]> | null = null;
+const loadCats = () => (catsP ??= Promise.resolve(createClient().from("categories").select("label, icon, color")).then((r) => (r.data ?? []) as Cat[]).catch(() => []));
+function useCats() {
+  const [cats, setCats] = useState<Cat[]>([]);
+  useEffect(() => void loadCats().then(setCats), []);
+  return cats;
+}
+
+function RowMark({ label, cats, size }: { label: string; cats: Cat[]; size: number }) {
+  const c = cats.find((x) => x.label.toLowerCase() === label.toLowerCase());
+  if (c) return <CategoryIcon icon={c.icon} color={c.color} size={size} />;
+  return <Merchant name={label} />;
+}
+
+// A split of money: a total, then one row per category or merchant, largest first.
+function BreakdownBlock({ b }: { b: Breakdown }) {
+  const cats = useCats();
+  const { money0 } = useMoney();
+  const total = b.total ?? b.rows.reduce((n, r) => n + r.amount, 0);
+  const max = Math.max(...b.rows.map((r) => r.amount));
+  return (
+    <section className="space-y-3">
+      <div className="space-y-0.5">
+        {b.title && <p className="text-[13px] text-muted">{b.title}</p>}
+        <p className="text-[32px] leading-tight font-semibold tabular tracking-[-0.03em]">{money0(total)}</p>
+      </div>
+      <ul className="space-y-3">
+        {b.rows.map((r) => (
+          <li key={r.label} className="flex items-center gap-3">
+            <RowMark label={r.label} cats={cats} size={32} />
+            <div className="flex-1 min-w-0 space-y-1.5">
+              <div className="flex justify-between gap-3"><span className="truncate">{r.label}</span><span className="tabular">{money0(r.amount)}</span></div>
+              <div className="h-1 rounded-full bg-[var(--hover)] overflow-hidden"><div className="h-full rounded-full bg-ink/70" style={{ width: `${Math.max(2, (r.amount / max) * 100)}%` }} /></div>
+            </div>
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
+}
+
+// Things to do about the answer, as links to the broke page that does them.
+function Actions({ actions }: { actions: Action[] }) {
+  const href = (h: string) => h.replace(/ /g, "%20");
+  return (
+    <div className="rounded-2xl border border-line divide-y divide-line overflow-hidden">
+      {actions.map((a) => (
+        <Link key={a.label} href={href(a.href)} className="flex items-center justify-between gap-3 px-4 py-3 hover:bg-[var(--hover)] transition-colors">
+          <span className="font-medium">{a.label}</span>
+          <ChevronRight size={16} className="text-muted shrink-0" />
+        </Link>
+      ))}
+    </div>
+  );
+}
+
+// Follow-up questions: tapping one asks it.
+function Next({ qs, onPick }: { qs: string[]; onPick: (q: string) => void }) {
+  return (
+    <div className="flex flex-wrap gap-2 pt-1">
+      {qs.map((q) => (
+        <button key={q} onClick={() => onPick(q)} className="rounded-full px-3.5 py-1.5 text-sm text-left transition-colors border border-line hover:bg-[var(--hover)]">
+          {q}
+        </button>
+      ))}
+    </div>
+  );
+}
+
 // Tiny markdown: status lines (\u001e) become a step list, "- " bullets, "### " headings, **bold** and links.
 function Reply({ text: raw, live, onPick }: { text: string; live: boolean; onPick?: (answer: string) => void }) {
-  const { body: text, ask, save, budget, rules } = replyBlocks(raw);
+  const { body: text, ask, save, budget, rules, breakdown, actions, next } = replyBlocks(raw);
   const lines = text.split("\n");
   // Each kind of step once, however many times the model repeats it. The latest stays last, so the spinner stays on it.
   const steps = [...new Set(lines.filter((l) => l.startsWith("\u001e")).map((l) => l.slice(1)).reverse())].reverse();
@@ -663,6 +716,8 @@ function Reply({ text: raw, live, onPick }: { text: string; live: boolean; onPic
           );
         return <p key={i}>{bold(line)}</p>;
       })}
+      {breakdown && !live && <BreakdownBlock b={breakdown} />}
+      {!!actions.length && !live && <Actions actions={actions} />}
       {save && !live && <SaveOffer proposed={save} />}
       {budget && !live && <BudgetOffer proposed={budget} />}
       {rules && !live && <RuleOffer proposed={rules} />}
@@ -678,6 +733,7 @@ function Reply({ text: raw, live, onPick }: { text: string; live: boolean; onPic
           </div>
         </div>
       )}
+      {!!next.length && !ask && !live && onPick && <Next qs={next} onPick={onPick} />}
     </>
   );
 }
