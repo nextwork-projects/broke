@@ -1,5 +1,6 @@
 import { Banknote, BarChart3, Bitcoin, Car, CreditCard, Gem, HandCoins, House, Landmark, type LucideIcon } from "lucide-react";
 import Link from "next/link";
+import { AccountEdit } from "@/components/AccountEdit";
 import { AccountToggle } from "@/components/AccountToggle";
 import { HoldingFee } from "@/components/HoldingFee";
 import { CardArt } from "@/components/CardArt";
@@ -123,6 +124,7 @@ export default async function Accounts() {
                     <div className="text-xs text-muted">{a.item.institution_name}{a.subtype ? ` · ${subtypeLabel(a.subtype)}` : ""}</div>
                   </div>
                   <span className="tabular font-medium">{money(a.current_balance, a.currency)}</span>
+                  <AccountEdit id={a.id} name={a.custom_name || a.name} bankName={a.name} type={a.type} manual={a.item.id === "manual"} />
                   <AccountToggle id={a.id} included={a.included} name={a.custom_name || a.name} />
                 </div>
                 {!!a.holdings?.length && (
