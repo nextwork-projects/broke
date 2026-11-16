@@ -103,7 +103,26 @@ async function ebFeed(env: Env, token: string, since: string, f?: Fetch) {
       key = page.continuation_key ?? null;
     }
   }
-  return { accounts, txns };
+  return { accounts, txns: uniqueIds(txns) };
+}
+
+/** Some banks reuse a reference for different rows on one day (seen: "2025-01-03.0" twice), or send a row twice across
+ * pages. The same row again is dropped. A different row with a taken id gets its amount and text added, so it keeps the
+ * same id on every sync. The first row keeps the bank's id, so rows saved before this stay matched. */
+export function uniqueIds(rows: FeedTxn[]): FeedTxn[] {
+  const seen = new Map<string, FeedTxn>();
+  const same = new Set<string>(); // bank id, day, amount and text: the same row sent again
+  for (const r of rows) {
+    const key = JSON.stringify([r.plaid_transaction_id, r.date, r.amount, r.name]);
+    if (same.has(key)) continue;
+    same.add(key);
+    if (!seen.has(r.plaid_transaction_id)) { seen.set(r.plaid_transaction_id, r); continue; }
+    const base = `${r.plaid_transaction_id}|${r.amount}|${r.name}`;
+    let id = base;
+    for (let n = 2; seen.has(id); n++) id = `${base}|${n}`;
+    seen.set(id, { ...r, plaid_transaction_id: id });
+  }
+  return [...seen.values()];
 }
 
 // ---- Basiq (Australia) ----

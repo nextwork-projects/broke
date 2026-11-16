@@ -379,7 +379,8 @@ async function saveFeed(item: Item, accounts: FeedAccount[] | ReturnType<typeof 
     .select("id, plaid_account_id");
   if (acctErr) throw acctErr;
   const accountId = new Map((saved ?? []).map((a) => [a.plaid_account_id, a.id]));
-  const txns = feed.filter((t) => accountId.has(t.account_ref));
+  // One row per id: a repeated id in one batch would fail the whole insert. Providers make their ids unique first.
+  const txns = [...new Map(feed.filter((t) => accountId.has(t.account_ref)).map((t) => [t.plaid_transaction_id, t])).values()];
   const row = ({ account_ref, ...t }: FeedTxn) => ({ ...t, user_id: item.user_id, account_id: accountId.get(account_ref)! });
 
   const chunks = <T,>(xs: T[]) => Array.from({ length: Math.ceil(xs.length / 500) }, (_, i) => xs.slice(i * 500, i * 500 + 500));
