@@ -164,3 +164,35 @@ export function ThemeToggle() {
     </div>
   );
 }
+
+const SKINS = [
+  { id: "default", label: "Default", what: "Clean and quiet", preview: { background: "#fff" }, side: { background: "#f6f6f5", borderRight: "1px solid #ececea" }, body: { background: "linear-gradient(#fff 0 38%, #e2e5fb 38% 46%, #fff 46%)" } },
+  { id: "retro", label: "Retro", what: "Aqua gel and brushed metal", preview: { background: "repeating-linear-gradient(0deg,#e4e7ec 0 2px,#eef0f3 2px 4px)" }, side: { background: "linear-gradient(#eceef1,#c3c8cf)", borderRight: "1px solid #adb3bd" }, body: { background: "linear-gradient(transparent 0 32%, #5ea6f6 32% 46%, transparent 46%) 10px 0/42% 100% no-repeat" } },
+] as const;
+
+// Default or Retro (globals.css, :root[data-skin="retro"]). Saved in localStorage; layout.tsx applies it before paint.
+export function SkinPicker() {
+  const [skin, setSkin] = useState("default");
+  useEffect(() => setSkin(document.documentElement.dataset.skin ?? "default"), []);
+  function pick(s: string) {
+    setSkin(s);
+    if (s === "default") delete document.documentElement.dataset.skin;
+    else document.documentElement.dataset.skin = s;
+    try {
+      if (s === "default") localStorage.removeItem("skin");
+      else localStorage.setItem("skin", s);
+    } catch {}
+  }
+  return (
+    <div role="radiogroup" aria-label="Theme" className="grid grid-cols-2 gap-3 max-w-md">
+      {SKINS.map((s) => (
+        <button key={s.id} role="radio" aria-checked={skin === s.id} onClick={() => pick(s.id)}
+          className={`text-left rounded-xl border p-2 space-y-2 ${skin === s.id ? "border-brand ring-1 ring-brand" : "border-line hover:border-muted"}`}>
+          <span className="grid grid-cols-[28%_1fr] h-16 rounded-md overflow-hidden border border-black/10" style={s.preview} aria-hidden><i style={s.side} /><i style={s.body} /></span>
+          <span className="block text-sm font-medium px-0.5">{s.label}</span>
+          <span className="block text-xs text-muted px-0.5">{s.what}</span>
+        </button>
+      ))}
+    </div>
+  );
+}

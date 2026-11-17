@@ -13,8 +13,8 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
   return (
     <html lang="en" suppressHydrationWarning>
       <head>
-        {/* Apply the saved theme before paint; no attribute means follow the system. */}
-        <script dangerouslySetInnerHTML={{ __html: `try{var t=localStorage.getItem("theme");if(t==="light"||t==="dark")document.documentElement.dataset.theme=t}catch(e){}` }} />
+        {/* Apply the saved mode, theme and Hide balances before paint; no data-theme means follow the system. */}
+        <script dangerouslySetInnerHTML={{ __html: `try{var d=document.documentElement,t=localStorage.getItem("theme");if(t==="light"||t==="dark")d.dataset.theme=t;if(localStorage.getItem("skin")==="retro")d.dataset.skin="retro";if(localStorage.getItem("hideMoney"))d.classList.add("hide-money")}catch(e){}` }} />
       </head>
       <body className={`${figtree.variable} antialiased`}>{children}</body>
     </html>

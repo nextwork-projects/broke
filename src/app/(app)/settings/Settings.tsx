@@ -9,7 +9,7 @@ import { modelOptions, saveChoice } from "@/components/Assistant";
 import { CountryField } from "@/components/CountryPicker";
 import { Dropdown } from "@/components/Dropdown";
 import { Modal } from "@/components/Modal";
-import { ThemeToggle } from "@/components/Nav";
+import { SkinPicker, ThemeToggle } from "@/components/Nav";
 import { SignOut } from "@/components/SignOut";
 import { countryOf } from "@/lib/countries";
 import { bandLabel, creditOf, monthText } from "@/lib/credit";
@@ -120,9 +120,14 @@ export function Settings({ signedIn, local, folder, repo, update, email, profile
 
         {group === "profile" && <ProfileCards email={email} profile={profile} />}
         {group === "appearance" && (
-          <Card title="Theme" what="System follows your device. Saved in this browser.">
-            <ThemeToggle />
-          </Card>
+          <>
+            <Card title="Theme" what="Retro is Mac OS X circa 2006: Aqua gel buttons, brushed metal and striped rows. Saved in this browser.">
+              <SkinPicker />
+            </Card>
+            <Card title="Light or dark" what="System follows your device. Works with either theme. Saved in this browser.">
+              <ThemeToggle />
+            </Card>
+          </>
         )}
         {group === "improve" && update && <Card title="A new version of broke is ready" what={folder ? "Your changes stay. Stop broke first, then run this in your broke folder, and start broke again." : "Use Get the latest broke below. Your changes stay."}>{folder && <code className="block font-mono text-[13px] rounded-lg border border-line px-3 py-2">npm run update</code>}</Card>}
         {group === "improve" && <ImproveCard folder={folder} repo={repo} />}
