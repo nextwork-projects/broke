@@ -89,40 +89,56 @@ export function ebTxn(t: EbTxn, uid: string): FeedTxn | null {
 }
 async function ebFeed(env: Env, token: string, since: string, f?: Fetch) {
   const s = JSON.parse(token) as { accounts: EbAccount[]; institution?: string };
-  const accounts: FeedAccount[] = [], txns: FeedTxn[] = [];
+  const accounts: FeedAccount[] = [], pages: FeedTxn[][] = [];
   for (const a of s.accounts) {
     const { balances } = await eb<{ balances: EbBalance[] }>(env, `/accounts/${a.uid}/balances`, {}, f);
     accounts.push(ebAccount(a, balances ?? [], s.institution ?? "Bank"));
     for (let key: string | null = null, first = true; first || key; first = false) {
       const q = new URLSearchParams({ date_from: since.slice(0, 10), ...(key ? { continuation_key: key } : {}) });
       const page: { transactions?: EbTxn[]; continuation_key?: string | null } = await eb(env, `/accounts/${a.uid}/transactions?${q}`, {}, f);
-      for (const t of page.transactions ?? []) {
-        const row = ebTxn(t, a.uid);
-        if (row) txns.push(row);
-      }
+      pages.push((page.transactions ?? []).map((t) => ebTxn(t, a.uid)).filter((t): t is FeedTxn => !!t));
       key = page.continuation_key ?? null;
     }
   }
-  return { accounts, txns: uniqueIds(txns) };
+  return { accounts, txns: uniqueIds(pages) };
 }
 
 /** Some banks reuse a reference for different rows on one day (seen: "2025-01-03.0" twice), or send a row twice across
- * pages. The same row again is dropped. A different row with a taken id gets its amount and text added, so it keeps the
- * same id on every sync. The first row keeps the bank's id, so rows saved before this stay matched. */
-export function uniqueIds(rows: FeedTxn[]): FeedTxn[] {
-  const seen = new Map<string, FeedTxn>();
-  const same = new Set<string>(); // bank id, day, amount and text: the same row sent again
-  for (const r of rows) {
-    const key = JSON.stringify([r.plaid_transaction_id, r.date, r.amount, r.name]);
-    if (same.has(key)) continue;
-    same.add(key);
-    if (!seen.has(r.plaid_transaction_id)) { seen.set(r.plaid_transaction_id, r); continue; }
-    const base = `${r.plaid_transaction_id}|${r.amount}|${r.name}`;
-    let id = base;
-    for (let n = 2; seen.has(id); n++) id = `${base}|${n}`;
-    seen.set(id, { ...r, plaid_transaction_id: id });
+ * pages. A row that an earlier page already held is dropped. The same row twice on one page is two real payments, so
+ * both stay. Rows that share an id are put in a fixed order (day, amount, text) before ids are given out: the first
+ * keeps the bank's id and the rest get their amount and text added. So each row gets the same id on every sync,
+ * whatever order the bank sends them in. */
+export function uniqueIds(pages: FeedTxn[][]): FeedTxn[] {
+  const rows: FeedTxn[] = [];
+  const most = new Map<string, number>(); // bank id, day, amount and text: the most copies any one page held
+  for (const page of pages) {
+    const here = new Map<string, number>();
+    for (const r of page) {
+      const key = JSON.stringify([r.plaid_transaction_id, r.date, r.amount, r.name]);
+      const n = (here.get(key) ?? 0) + 1;
+      here.set(key, n);
+      if (n > (most.get(key) ?? 0)) { most.set(key, n); rows.push(r); }
+    }
   }
-  return [...seen.values()];
+  const cmp = (a: string, b: string) => (a < b ? -1 : a > b ? 1 : 0);
+  const order = rows.map((_, i) => i).sort((i, j) => {
+    const a = rows[i], b = rows[j];
+    return cmp(a.plaid_transaction_id, b.plaid_transaction_id) || cmp(a.date, b.date) || a.amount - b.amount || cmp(a.name, b.name) || i - j;
+  });
+  const taken = new Set<string>();
+  const out = [...rows];
+  for (const i of order) {
+    const r = rows[i];
+    let id = r.plaid_transaction_id;
+    if (taken.has(id)) {
+      const base = `${id}|${r.amount}|${r.name}`;
+      id = base;
+      for (let n = 2; taken.has(id); n++) id = `${base}|${n}`;
+      out[i] = { ...r, plaid_transaction_id: id };
+    }
+    taken.add(id);
+  }
+  return out;
 }
 
 // ---- Basiq (Australia) ----
