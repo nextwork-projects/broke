@@ -379,7 +379,11 @@ async function saveFeed(item: Item, accounts: FeedAccount[] | ReturnType<typeof 
     .select("id, plaid_account_id");
   if (acctErr) throw acctErr;
   const accountId = new Map((saved ?? []).map((a) => [a.plaid_account_id, a.id]));
-  const txns = feed.filter((t) => accountId.has(t.account_ref));
+  // One row per id: a repeated id in one batch would fail the whole insert. Providers make their ids unique first.
+  const mine = feed.filter((t) => accountId.has(t.account_ref));
+  const txns = [...new Map(mine.map((t) => [t.plaid_transaction_id, t])).values()];
+  // Count only: ids can hold account numbers, amounts and payment text.
+  if (txns.length < mine.length) console.warn(`[broke] ${item.provider ?? "feed"}: dropped ${mine.length - txns.length} rows with repeated ids`);
   const row = ({ account_ref, ...t }: FeedTxn) => ({ ...t, user_id: item.user_id, account_id: accountId.get(account_ref)! });
 
   const chunks = <T,>(xs: T[]) => Array.from({ length: Math.ceil(xs.length / 500) }, (_, i) => xs.slice(i * 500, i * 500 + 500));

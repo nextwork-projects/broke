@@ -1,7 +1,7 @@
 // Run: node src/lib/providers/feeds.test.ts
 import assert from "node:assert/strict";
 import { createVerify, generateKeyPairSync } from "node:crypto";
-import { basiqAccount, basiqStart, basiqTxn, belvoAccount, belvoStart, belvoTxn, ebAccount, ebJwt, ebStart, ebTxn, feedData, pemFrom, validCpf } from "./feeds.ts";
+import { basiqAccount, basiqStart, basiqTxn, belvoAccount, belvoStart, belvoTxn, ebAccount, ebJwt, ebStart, ebTxn, feedData, pemFrom, uniqueIds, validCpf } from "./feeds.ts";
 
 const { privateKey, publicKey } = generateKeyPairSync("rsa", { modulusLength: 2048 });
 const pem = privateKey.export({ type: "pkcs8", format: "pem" }).toString();
@@ -91,4 +91,19 @@ assert.equal(validCpf("123"), false);
   assert.equal(url, "https://widget.belvo.io/?access_token=tok&locale=pt&access_mode=recurrent&external_id=u-1");
 }
 
+// Repeated ids from the bank: a row an earlier page held is dropped, a different row is kept under a stable new id.
+{
+  const row = (id: string, amount: number, name: string) => ({ plaid_transaction_id: id, account_ref: "enablebanking:u", date: "2025-01-03", amount, name, merchant_name: null, logo_url: null, pending: false, plaid_category: null });
+  const ids = (pages: ReturnType<typeof row>[][]) => uniqueIds(pages).map((r) => `${r.name}=${r.plaid_transaction_id}`);
+  assert.deepEqual(ids([[row("x", 5, "Coffee"), row("x", 12, "Lunch")], [row("x", 5, "Coffee"), row("x", 12, "Lunch"), row("y", 1, "A")]]), ["Coffee=x", "Lunch=x|12|Lunch", "A=y"]);
+  // The bank sends the rows the other way round on the next sync: each keeps its id.
+  assert.deepEqual(ids([[row("x", 12, "Lunch"), row("x", 5, "Coffee")]]), ["Lunch=x|12|Lunch", "Coffee=x"]);
+  // Two real payments that look the same, on one page: both kept, and again when a later page repeats them.
+  assert.deepEqual(ids([[row("x", 5, "Coffee"), row("x", 5, "Coffee")]]), ["Coffee=x", "Coffee=x|5|Coffee"]);
+  assert.deepEqual(ids([[row("x", 5, "Coffee"), row("x", 5, "Coffee")], [row("x", 5, "Coffee"), row("x", 5, "Coffee")]]), ["Coffee=x", "Coffee=x|5|Coffee"]);
+  // Same amount and text but another day: still kept.
+  const other = uniqueIds([[row("x", 5, "Coffee"), { ...row("x", 5, "Coffee"), date: "2025-01-04" }]]);
+  assert.equal(other.length, 2);
+  assert.equal(new Set(other.map((r) => r.plaid_transaction_id)).size, 2);
+}
 console.log("feeds: ok");
