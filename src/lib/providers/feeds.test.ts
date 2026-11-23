@@ -1,7 +1,7 @@
 // Run: node src/lib/providers/feeds.test.ts
 import assert from "node:assert/strict";
 import { createVerify, generateKeyPairSync } from "node:crypto";
-import { basiqAccount, basiqStart, basiqTxn, belvoAccount, belvoStart, belvoTxn, ebAccount, ebJwt, ebStart, ebTxn, feedData, pemFrom, validCpf } from "./feeds.ts";
+import { basiqAccount, basiqStart, basiqTxn, belvoAccount, belvoStart, belvoTxn, ebAccount, ebJwt, ebStart, ebTxn, ebUniqueIds, feedData, pemFrom, validCpf } from "./feeds.ts";
 
 const { privateKey, publicKey } = generateKeyPairSync("rsa", { modulusLength: 2048 });
 const pem = privateKey.export({ type: "pkcs8", format: "pem" }).toString();
@@ -27,6 +27,9 @@ assert.equal(ebTxn({ transaction_id: "t4", booking_date: "2026-10-03", transacti
 // No id from the bank: stable across syncs.
 const noId = { booking_date: "2026-10-03", transaction_amount: { amount: "5" }, credit_debit_indicator: "DBIT", status: "BOOK", note: "x" };
 assert.equal(ebTxn(noId, "u1")!.plaid_transaction_id, ebTxn(noId, "u1")!.plaid_transaction_id);
+// Two identical rows on one day (Swedbank sends no ids): numbered, so neither is lost and the first keeps its id.
+const twice = ebUniqueIds([ebTxn(noId, "u1")!, ebTxn(noId, "u1")!, ebTxn({ ...noId, note: "y" }, "u1")!]).map((t) => t.plaid_transaction_id);
+assert.deepEqual(twice, ["enablebanking:u1:2026-10-03|5|x", "enablebanking:u1:2026-10-03|5|x|2", "enablebanking:u1:2026-10-03|5|y"]);
 const card = ebAccount({ uid: "u2", product: "Visa", cash_account_type: "CARD", currency: "EUR", account_id: { iban: "DE89370400440532013000" } }, [{ balance_type: "OTHR", balance_amount: { amount: "1", currency: "EUR" } }, { balance_type: "CLBD", balance_amount: { amount: "-250.5", currency: "EUR" } }], "ING");
 assert.deepEqual([card.type, card.current_balance, card.mask, card.name, card.currency], ["credit", 250.5, "3000", "Visa", "EUR"]);
 assert.equal(ebAccount({ uid: "u3", cash_account_type: "SVGS" }, [], "ING").subtype, "savings");

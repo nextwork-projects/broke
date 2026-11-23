@@ -103,7 +103,18 @@ async function ebFeed(env: Env, token: string, since: string, f?: Fetch) {
       key = page.continuation_key ?? null;
     }
   }
-  return { accounts, txns };
+  return { accounts, txns: ebUniqueIds(txns) };
+}
+
+/** Banks with no transaction id (Swedbank) can send two rows with the same day, amount and text. The second gets |2, the
+ * third |3, so they don't clash. Same-looking rows are interchangeable, so the numbers stay stable from sync to sync. */
+export function ebUniqueIds(txns: FeedTxn[]): FeedTxn[] {
+  const seen = new Map<string, number>();
+  return txns.map((t) => {
+    const n = (seen.get(t.plaid_transaction_id) ?? 0) + 1;
+    seen.set(t.plaid_transaction_id, n);
+    return n === 1 ? t : { ...t, plaid_transaction_id: `${t.plaid_transaction_id}|${n}` };
+  });
 }
 
 // ---- Basiq (Australia) ----
