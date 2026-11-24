@@ -7,54 +7,66 @@ import { Dropdown } from "@/components/Dropdown";
 import { Modal } from "@/components/Modal";
 import { toast } from "@/components/Toast";
 import { applyRules, RULE_COLS, type Rule } from "@/lib/rules";
-import { applyMapping, categoryKey, parseStatement, type DateOrder, type Mapping, type Parsed, type Row } from "@/lib/statement";
+import { applyMapping, categoryKey, mergeRows, parseStatement, type DateOrder, type Mapping, type Parsed, type Row } from "@/lib/statement";
 import { pdfToTable, type PdfItem } from "@/lib/statement-pdf";
 import { createClient } from "@/utils/supabase/client";
 
 type Acct = { id: string; label: string };
+type Item = { name: string; parsed: Parsed; pdf: boolean };
+type Read = { item: Item } | { err: string } | { locked: true };
 const NEW = "__new";
 const ORDERS: { value: DateOrder; label: string }[] = [
   { value: "dmy", label: "Day first (31/12/2026)" },
   { value: "mdy", label: "Month first (12/31/2026)" },
   { value: "ymd", label: "Year first (2026/12/31)" },
 ];
+const headerOf = (it?: Item) => (it?.parsed.kind === "csv" ? it.parsed.table.header.join("\u0000") : null);
+const nameOf = (file: string) => file.replace(/\.[^.]+$/, "").replace(/[_-]+/g, " ").slice(0, 60) || "Imported account";
+const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? "" : "s"}`;
 
-// "Import a bank statement": CSV, OFX or QIF from any bank. Rows are manual, keyed so a second import of the
-// same file adds nothing (transactions.import_key, migration 0016). Goes into a manual account or a new one.
+// "Import a bank statement": CSV, OFX, QIF or PDF from any bank. Pick one file or many (a year of monthly
+// statements) for one account. Rows are manual, keyed so a second import of the same file adds nothing
+// (transactions.import_key, migration 0016), and a row in two overlapping statements is saved once.
+// Goes into a manual account or a new one.
 // trigger: draw your own opener (the Add accounts card) instead of the button.
 export function ImportStatement({ accounts, locale, currency, link = false, trigger }: { accounts: Acct[]; locale: string; currency: string; link?: boolean; trigger?: (open: () => void) => React.ReactNode }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
-  const [file, setFile] = useState("");
-  const [parsed, setParsed] = useState<Parsed | null>(null);
-  const [m, setM] = useState<Mapping | null>(null);
+  const [items, setItems] = useState<Item[]>([]); // statements read and ready
+  const [failed, setFailed] = useState<{ name: string; err: string }[]>([]); // files that could not be read
+  const [locked, setLocked] = useState<File[]>([]); // locked PDFs waiting for a password, first one asked
+  const [m, setM] = useState<Mapping | null>(null); // columns of the first CSV or PDF, used for every file laid out the same
   const [account, setAccount] = useState(accounts[0]?.id ?? NEW);
   const [newName, setNewName] = useState("");
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
-  const [pdfFile, setPdfFile] = useState<File | null>(null); // a locked PDF waiting for its password
   const [pdfPass, setPdfPass] = useState("");
 
-  const result = useMemo((): { rows: Row[]; skipped: number } => {
-    if (!parsed) return { rows: [], skipped: 0 };
-    if (parsed.kind !== "csv") return { rows: parsed.rows, skipped: 0 };
-    return m ? applyMapping(parsed.table, m, locale) : { rows: [], skipped: 0 };
-  }, [parsed, m, locale]);
+  const lead = items.find((it) => it.parsed.kind === "csv");
+  const perFile = useMemo(() => items.map((it): { rows: Row[]; skipped: number } => {
+    const p = it.parsed;
+    if (p.kind !== "csv") return { rows: p.rows, skipped: 0 };
+    return applyMapping(p.table, m && headerOf(it) === headerOf(lead) ? m : p.mapping, locale);
+  }), [items, lead, m, locale]);
+  const result = useMemo(() => {
+    const all = perFile.reduce((n, f) => n + f.rows.length, 0);
+    const rows = mergeRows(perFile.map((f) => f.rows));
+    return { rows, skipped: perFile.reduce((n, f) => n + f.skipped, 0), repeated: all - rows.length };
+  }, [perFile]);
   const fmt = useMemo(() => new Intl.NumberFormat(locale, { style: "currency", currency }), [locale, currency]);
 
   function reset() {
     setOpen(false);
-    setParsed(null);
+    setItems([]);
+    setFailed([]);
+    setLocked([]);
     setM(null);
-    setFile("");
     setErr("");
-    setPdfFile(null);
     setPdfPass("");
   }
 
   // Read here in the browser: a PDF statement never leaves this device.
-  async function readPdf(f: File, pass?: string) {
-    setBusy(true);
+  async function readPdf(f: File, pass?: string): Promise<Read> {
     try {
       const pdfjs = await import("pdfjs-dist");
       pdfjs.GlobalWorkerOptions.workerSrc = new URL("pdfjs-dist/build/pdf.worker.min.mjs", import.meta.url).toString();
@@ -66,38 +78,82 @@ export function ImportStatement({ accounts, locale, currency, link = false, trig
         }
       }
       const t = pdfToTable(items, locale);
-      if (!t) return setErr(items.length ? "No transactions found in that PDF. Is it a bank statement?" : "That PDF is a scanned picture with no text in it. Ask your bank for a CSV or a text PDF.");
-      setPdfFile(null);
-      setFile(f.name);
-      setNewName(f.name.replace(/\.[^.]+$/, "").replace(/[_-]+/g, " ").slice(0, 60) || "Imported account");
-      setParsed({ kind: "csv", ...t });
-      setM(t.mapping);
+      if (!t) return { err: items.length ? "No transactions found in that PDF. Is it a bank statement?" : "That PDF is a scanned picture with no text in it. Ask your bank for a CSV or a text PDF." };
+      return { item: { name: f.name, parsed: { kind: "csv", ...t }, pdf: true } };
     } catch (e) {
       // Many banks lock statements with a password.
-      if ((e as { name?: string }).name === "PasswordException") {
-        setPdfFile(f);
-        setErr(pass ? "That password didn't open it. Try again." : "");
-      } else {
-        console.error("[broke] pdf statement:", e);
-        setErr("Couldn't read that PDF.");
-      }
-    } finally {
-      setBusy(false);
+      if ((e as { name?: string }).name === "PasswordException") return { locked: true };
+      console.error("[broke] pdf statement:", e);
+      return { err: "Couldn't read that PDF." };
     }
   }
 
-  async function choose(f: File | undefined) {
-    if (!f) return;
-    setErr("");
+  async function read(f: File, pass?: string): Promise<Read> {
     const pdf = f.type === "application/pdf" || /\.pdf$/i.test(f.name);
-    if (f.size > (pdf ? 25e6 : 5e6)) return setErr(`That file is over ${pdf ? 25 : 5} MB. Export a shorter date range.`);
-    if (pdf) return readPdf(f);
+    if (f.size > (pdf ? 25e6 : 5e6)) return { err: `That file is over ${pdf ? 25 : 5} MB. Export a shorter date range.` };
+    if (pdf) return readPdf(f, pass);
     const p = parseStatement(await f.text(), f.name, locale);
-    if (p.kind === "csv" && !p.table.rows.length) return setErr("No dated rows found. Is this a bank statement export?");
-    setFile(f.name);
-    setNewName(f.name.replace(/\.[^.]+$/, "").replace(/[_-]+/g, " ").slice(0, 60) || "Imported account");
-    setParsed(p);
-    setM(p.kind === "csv" ? p.mapping : null);
+    if (p.kind === "csv" && !p.table.rows.length) return { err: "No dated rows found. Is this a bank statement export?" };
+    return { item: { name: f.name, parsed: p, pdf: false } };
+  }
+
+  // Add read statements. The first one with columns sets the columns and the new account's name.
+  function take(add: Item[]) {
+    if (!add.length) return;
+    if (!lead) {
+      const first = add.find((it) => it.parsed.kind === "csv");
+      if (first?.parsed.kind === "csv") setM(first.parsed.mapping);
+    }
+    if (!items.length) setNewName(nameOf(add[0].name));
+    setItems((was) => [...was, ...add.filter((it) => !was.some((w) => w.name === it.name))]);
+  }
+
+  async function choose(list: File[]) {
+    if (!list.length) return;
+    setErr("");
+    setBusy(true);
+    const add: Item[] = [];
+    const bad: { name: string; err: string }[] = [];
+    const lock: File[] = [];
+    for (const f of list) {
+      const r = await read(f);
+      if ("item" in r) add.push(r.item);
+      else if ("locked" in r) lock.push(f);
+      else bad.push({ name: f.name, err: r.err });
+    }
+    take(add);
+    setFailed((was) => [...was.filter((w) => !list.some((f) => f.name === w.name)), ...bad]);
+    setLocked((was) => [...was, ...lock.filter((f) => !was.some((w) => w.name === f.name))]);
+    setBusy(false);
+  }
+
+  async function unlock() {
+    const f = locked[0];
+    setBusy(true);
+    const r = await read(f, pdfPass);
+    setBusy(false);
+    if ("locked" in r) return setErr("That password didn't open it. Try again.");
+    setErr("");
+    setPdfPass("");
+    setLocked((was) => was.slice(1));
+    if ("item" in r) take([r.item]);
+    else setFailed((was) => [...was, { name: f.name, err: r.err }]);
+  }
+
+  function skipLocked() {
+    setErr("");
+    setPdfPass("");
+    setFailed((was) => [...was, { name: locked[0].name, err: "Locked. Skipped." }]);
+    setLocked((was) => was.slice(1));
+  }
+
+  function remove(name: string) {
+    const left = items.filter((it) => it.name !== name);
+    setItems(left);
+    if (lead?.name === name) {
+      const next = left.find((it) => it.parsed.kind === "csv");
+      setM(next?.parsed.kind === "csv" ? next.parsed.mapping : null);
+    }
   }
 
   async function submit() {
@@ -135,12 +191,12 @@ export function ImportStatement({ accounts, locale, currency, link = false, trig
     if (added) await fetch("/api/recurring/find", { method: "POST" }).catch(() => null); // repeating charges in what came in
     setBusy(false);
     const dupes = rows.length - added;
-    toast(`${added} added${dupes ? `, ${dupes} already there` : ""}`);
+    toast(`${added} added${dupes ? `, ${dupes} already there` : ""}${failed.length + locked.length ? `, ${plural(failed.length + locked.length, "file")} skipped` : ""}`);
     reset();
     router.refresh();
   }
 
-  const cols = parsed?.kind === "csv" ? parsed.table.header.map((h, i) => ({ value: String(i), label: h })) : [];
+  const cols = lead?.parsed.kind === "csv" ? lead.parsed.table.header.map((h, i) => ({ value: String(i), label: h })) : [];
   const none = { value: "-1", label: "Not used" };
   const pick = (label: string, key: "date" | "name" | "amount" | "debit" | "credit", optional = false) =>
     m && (
@@ -163,27 +219,51 @@ export function ImportStatement({ accounts, locale, currency, link = false, trig
               <div className="card-title">Import a bank statement</div>
               <button type="button" aria-label="Close" onClick={reset} className="p-2 -mr-2 rounded-full hover:bg-[var(--hover)]"><X size={18} /></button>
             </div>
-            <p className="text-sm text-muted">Log in to your bank on a computer, open the account and look for Statements or Download. CSV, OFX, QIF and PDF all work. A PDF stays on this device. Importing the same file again adds nothing new.</p>
+            <p className="text-sm text-muted">Log in to your bank on a computer, open the account and look for Statements or Download. CSV, OFX, QIF and PDF all work. A PDF stays on this device. You can pick many files at once, like a year of monthly statements for one account. Importing the same file again adds nothing new.</p>
 
             <label className="block space-y-1.5">
-              <span className="text-sm font-medium">Statement file</span>
-              <input data-autofocus type="file" accept=".csv,.txt,.ofx,.qfx,.qif,.pdf,text/csv,application/pdf" onChange={(e) => choose(e.target.files?.[0])} className="select file:mr-3 file:rounded-full file:border-0 file:bg-canvas file:px-3 file:py-1 file:text-sm" />
+              <span className="text-sm font-medium">Statement files</span>
+              <input data-autofocus type="file" multiple accept=".csv,.txt,.ofx,.qfx,.qif,.pdf,text/csv,application/pdf" disabled={busy}
+                onChange={(e) => { const list = [...(e.target.files ?? [])]; e.target.value = ""; choose(list); }}
+                className="select file:mr-3 file:rounded-full file:border-0 file:bg-canvas file:px-3 file:py-1 file:text-sm" />
             </label>
-            {pdfFile && (
-              <form onSubmit={(e) => { e.preventDefault(); readPdf(pdfFile, pdfPass); }} className="space-y-2">
-                <p className="text-sm">This PDF is locked. Banks often use something like your date of birth or customer number: your statement email usually says which. It stays on this device.</p>
+            {locked[0] && (
+              <form onSubmit={(e) => { e.preventDefault(); unlock(); }} className="space-y-2">
+                <p className="text-sm">{locked[0].name} is locked. Banks often use something like your date of birth or customer number: your statement email usually says which. It stays on this device.</p>
                 <div className="flex gap-2">
                   <input type="password" autoComplete="off" value={pdfPass} onChange={(e) => setPdfPass(e.target.value)} aria-label="PDF password" className="select flex-1" />
                   <button disabled={!pdfPass || busy} className="btn-primary shrink-0">{busy ? "Opening..." : "Open"}</button>
+                  {(locked.length > 1 || items.length > 0) && <button type="button" onClick={skipLocked} disabled={busy} className="btn shrink-0">Skip</button>}
                 </div>
               </form>
             )}
 
-            {parsed && (
+            {items.length + failed.length > 1 && (
+              <ul className="border border-line rounded-xl divide-y divide-line text-sm">
+                {items.map((it, i) => (
+                  <li key={it.name} className="flex items-center gap-2 px-3 py-2">
+                    <span className="truncate flex-1">{it.name}</span>
+                    <span className="text-muted tabular shrink-0">{plural(perFile[i]?.rows.length ?? 0, "transaction")}</span>
+                    <button type="button" aria-label={`Remove ${it.name}`} onClick={() => remove(it.name)} className="p-1 -mr-1 rounded-full hover:bg-[var(--hover)]"><X size={14} /></button>
+                  </li>
+                ))}
+                {failed.map((f) => (
+                  <li key={f.name} className="flex items-center gap-2 px-3 py-2">
+                    <span className="truncate flex-1">{f.name}</span>
+                    <span className="text-bad shrink-0">{f.err}</span>
+                  </li>
+                ))}
+              </ul>
+            )}
+            {items.length + failed.length === 1 && failed[0] && <p className="text-sm text-bad">{failed[0].err}</p>}
+
+            {items.length > 0 && (
               <>
                 <p className="text-sm text-muted">
-                  {file}: {/\.pdf$/i.test(file) ? "PDF" : parsed.kind.toUpperCase()}, {result.rows.length} transactions{result.skipped ? `, ${result.skipped} rows skipped (no date or amount)` : ""}.
+                  {items.length === 1 ? `${items[0].name}: ${items[0].pdf ? "PDF" : items[0].parsed.kind.toUpperCase()}` : plural(items.length, "file")}, {plural(result.rows.length, "transaction")}
+                  {result.repeated ? `, ${result.repeated} in more than one file (saved once)` : ""}{result.skipped ? `, ${result.skipped} rows skipped (no date or amount)` : ""}.
                 </p>
+                {m && items.length > 1 && <p className="text-sm text-muted">These columns are for {lead?.name} and the files laid out the same way.</p>}
 
                 {m && (
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -245,7 +325,7 @@ export function ImportStatement({ accounts, locale, currency, link = false, trig
             )}
 
             {err && <p className="text-sm text-bad">{err}</p>}
-            {parsed && <button onClick={submit} disabled={busy || !result.rows.length} className="btn-primary w-full !py-2.5">{busy ? "Importing..." : `Import ${result.rows.length} transactions`}</button>}
+            {items.length > 0 && <button onClick={submit} disabled={busy || !result.rows.length} className="btn-primary w-full !py-2.5">{busy ? "Importing..." : `Import ${result.rows.length} transactions`}</button>}
           </div>
         </Modal>
       )}

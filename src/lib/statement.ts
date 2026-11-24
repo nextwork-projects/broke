@@ -157,6 +157,12 @@ export function withKeys(rows: Omit<Row, "key">[], ids?: (string | undefined)[])
   });
 }
 
+// Rows from several statements of one account. Statements that overlap repeat a row with the same key: keep it once.
+export function mergeRows(lists: Row[][]): Row[] {
+  const seen = new Set<string>();
+  return lists.flat().filter((r) => !seen.has(r.key) && !!seen.add(r.key));
+}
+
 export function applyMapping(t: Table, m: Mapping, locale: string): { rows: Row[]; skipped: number } {
   const out: Omit<Row, "key">[] = [];
   let skipped = 0;

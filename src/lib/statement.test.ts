@@ -1,7 +1,7 @@
 // node src/lib/statement.test.ts
 // Samples are shaped like each bank's export (columns, date style, preamble); names and amounts are made up.
 import assert from "node:assert/strict";
-import { applyMapping, categoryKey, dateOrder, parseAmount, parseDate, parseStatement, type Row } from "./statement.ts";
+import { applyMapping, categoryKey, dateOrder, mergeRows, parseAmount, parseDate, parseStatement, type Row } from "./statement.ts";
 
 const csv = (text: string, locale: string) => {
   const p = parseStatement(text, "statement.csv", locale);
@@ -146,3 +146,14 @@ console.log("statement ok");
   assert.equal(categoryKey(""), null);
   assert.equal(categoryKey("Miscellaneous"), null);
 }
+
+// Several statements at once: rows in two overlapping statements count once, two real same-day charges stay two.
+{
+  const oct = csv("Date,Description,Amount\n10/30/2026,Coffee,-4.50\n10/31/2026,Coffee,-4.50\n10/31/2026,Coffee,-4.50\n", "en-US");
+  const nov = csv("Date,Description,Amount\n10/31/2026,Coffee,-4.50\n10/31/2026,Coffee,-4.50\n11/01/2026,Rent,-1200.00\n", "en-US");
+  const all = mergeRows([oct.rows, nov.rows]);
+  assert.equal(all.length, 4);
+  assert.deepEqual(brief(all).map((r) => r[0]), ["2026-10-30", "2026-10-31", "2026-10-31", "2026-11-01"]);
+}
+
+console.log("statement merge ok");
